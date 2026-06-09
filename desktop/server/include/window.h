@@ -15,10 +15,22 @@ private:
     // * Use grid layout
     QGridLayout layout;
 
-    // * Window elements
+    // * Window elements *
+    // * Labels
+    QLabel lbl_speed{tr("Speed: ")};
+    QLabel lbl_bat{tr("Battery: ")};
+    QLabel lbl_temp{tr("Temperature: ")};
+    QLabel lbl_light{tr("Light Signals: ")};
+
+    // * Sliders
     QSlider sld_bat{Qt::Horizontal};
     QSlider sld_temp{Qt::Horizontal};
     QSlider sld_speed{Qt::Horizontal};
+
+    // * Checkboxes
+    QCheckBox box_left{"Left"};
+    QCheckBox box_right{"Right"};
+    QCheckBox box_warning{"Warning"};
 
 public:
     // * Window and element placement created here
