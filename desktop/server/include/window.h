@@ -11,6 +11,18 @@
 
 class Window : public QDialog
 {
+private:
+    // * Use grid layout
+    QGridLayout layout;
+
+    // * Window elements
+    QSlider sld_bat{Qt::Horizontal};
+    QSlider sld_temp{Qt::Horizontal};
+    QSlider sld_speed{Qt::Horizontal};
+
+public:
+    // * Window and element placement created here
+    Window();
 };
 
 #endif
