@@ -5,16 +5,18 @@ project(bootcamp LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 
+find_package(Threads)
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia SerialPort)
 
 set(CLIENT_DIR desktop/client)
 set(SERVER_DIR desktop/server)
 set(ESP32_CLIENT_DIR esp32/client)
 set(ESP32_SERVER_DIR esp32/server)
-set(FONT_FILENAME MaterialIcons.ttf)
 set(USER_FONTS_DIR $ENV{HOME}/.local/share/fonts)
+set(FONT_FILENAME MaterialIcons.ttf)
 
 if(NOT EXISTS ${USER_FONTS_DIR}/${FONT_FILENAME})
     message(STATUS "Copying ${FONT_FILENAME} -> ${USER_FONTS_DIR}/${FONT_FILENAME}")
@@ -57,8 +59,21 @@ target_link_libraries(server-comservice PRIVATE Qt6::Core Qt6::SerialPort)
 
 qt_add_executable(client ${CLIENT_GUI_SRC})
 target_include_directories(client PRIVATE ${CLIENT_DIR}/include shared)
-target_link_libraries(client PRIVATE Qt6::Core Qt6::Widgets Qt6::Multimedia client-comservice)
+target_link_libraries(client PRIVATE 
+    Qt6::Core
+    Qt6::Widgets
+    Qt6::Multimedia
+    Qt6::SerialPort
+    Threads::Threads
+    client-comservice
+)
 
 qt_add_executable(server ${SERVER_GUI_SRC})
 target_include_directories(server PRIVATE ${SERVER_DIR}/include shared)
-target_link_libraries(server PRIVATE Qt6::Core Qt6::Widgets server-comservice)
+target_link_libraries(server PRIVATE
+    Qt6::Core
+    Qt6::Widgets
+    Qt6::SerialPort
+    Threads::Threads
+    server-comservice
+)
