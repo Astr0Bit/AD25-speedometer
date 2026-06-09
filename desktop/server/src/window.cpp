@@ -1,5 +1,6 @@
 #include "window.h"
 #include "setting.h"
+#include <vector>
 
 // * Resources used:
 // - https://doc.qt.io/qt-6/qtwidgets-widgets-sliders-example.html
@@ -12,35 +13,54 @@
 // - https://stackoverflow.com/questions/24016264/qt-how-to-disable-qcheckbox-while-retaining-checked-state
 // - https://doc.qt.io/qt-6/qabstractbutton.html#checked-prop
 
+// * Helper function to make the grid
+void make_grid(QGridLayout &grid_layout, std::vector<std::vector<QWidget *>> &cols)
+{
+    for (size_t col = 0; col < cols.size(); ++col)
+    {
+        for (size_t row = 0; row < cols[col].size(); ++row)
+        {
+            grid_layout.addWidget(cols[col][row], static_cast<int>(row), col, 1, 1);
+        }
+    }
+}
+
 Window::Window()
 {
     // * NOTE: Could be improved with functions
 
-    // * Add text before each slider
-    sld_layout.addWidget(&lbl_speed, 0, 0, 1, 1);
-    sld_layout.addWidget(&lbl_temp, 1, 0, 1, 1);
-    sld_layout.addWidget(&lbl_bat, 2, 0, 1, 1);
-    sld_layout.addWidget(&lbl_light, 3, 0, 1, 1);
+    // * Vector with all elements
+    std::vector<std::vector<QWidget *>> cols = {
+        // * Text before each slider
+        {&lbl_speed, &lbl_temp, &lbl_bat, &lbl_light},
 
-    // * Add the sliders to the window
-    sld_layout.addWidget(&sld_speed, 0, 1, 1, 1);
-    sld_layout.addWidget(&sld_temp, 1, 1, 1, 1);
-    sld_layout.addWidget(&sld_bat, 2, 1, 1, 1);
+        // * Sliders
+        {&sld_speed, &sld_temp, &sld_bat},
 
-    // * Add text after each slider
-    sld_layout.addWidget(&lbl_speed_val, 0, 2, 1, 1);
-    sld_layout.addWidget(&lbl_temp_val, 1, 2, 1, 1);
-    sld_layout.addWidget(&lbl_bat_val, 2, 2, 1, 1);
+        // * Text after each slider
+        {&lbl_speed_val, &lbl_temp_val, &lbl_bat_val},
+    };
+    make_grid(sld_layout, cols);
+
+    // * Lambda to make adding methods to sliders more DRY
+    auto setupSlider = [this](QSlider &slider, QLabel &valLabel, const QString &unit, int min, int max)
+    {
+        slider.setRange(min, max);
+        slider.setValue(min);
+
+        // Set initial text of label to min value
+        valLabel.setText(QString("%1 %2").arg(min).arg(unit));
+
+        // Connect the slider to update the label dynamically
+        connect(&slider, &QSlider::valueChanged, [&valLabel, unit](int value)
+                { valLabel.setText(QString("%1 %2").arg(value).arg(unit)); });
+    };
 
     // * Add methods to the sliders
-    connect(&sld_speed, &QSlider::valueChanged, [this](int value)
-            { lbl_speed_val.setText(QString("%1 Kph").arg(value)); });
-
-    connect(&sld_bat, &QSlider::valueChanged, [this](int value)
-            { lbl_bat_val.setText(QString("%1 %").arg(value)); });
-
-    connect(&sld_temp, &QSlider::valueChanged, [this](int value)
-            { lbl_temp_val.setText(QString("%1 °C").arg(value)); });
+    // TODO -> Get min, max values for each slider using Setting::Signal class
+    setupSlider(sld_speed, lbl_speed_val, "Kph", 0, 240);
+    setupSlider(sld_bat, lbl_bat_val, "%", 0, 100);
+    setupSlider(sld_temp, lbl_temp_val, "°C", -60, 60);
 
     // * Put the checkboxes within a separate layout
     // * Add the checkboxes
@@ -55,26 +75,10 @@ Window::Window()
     connect(&box_right, &QAbstractButton::toggled, [this](bool checked)
             { box_left.setEnabled(!checked); });
 
-    // TODO -> Get min, max values for each slider using Setting::Signal class
-    // * NOTE: Just for experimenting
-    sld_speed.setMinimum(0);
-    sld_speed.setMaximum(240);
-    sld_speed.setValue(0);
-
-    sld_bat.setMinimum(0);
-    sld_bat.setMaximum(100);
-    sld_bat.setValue(0);
-
-    sld_temp.setMinimum(-60);
-    sld_temp.setMaximum(60);
-    sld_temp.setValue(-60);
-
     // * Link the box layout to the slider layout
     sld_layout.addLayout(&box_layout, 3, 1);
-
     setLayout(&sld_layout);
 
     setWindowTitle("Server");
-
     resize(700, 200);
 }
