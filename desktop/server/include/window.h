@@ -13,13 +13,20 @@ class Window : public QDialog
 {
 private:
     // * Use grid layout
-    QGridLayout layout;
+    QGridLayout sld_layout;
+    QHBoxLayout box_layout;
 
     // * Window elements *
     // * Labels
     QLabel lbl_speed{tr("Speed: ")};
+    QLabel lbl_speed_val{tr("0 Kph")};
+
     QLabel lbl_bat{tr("Battery: ")};
+    QLabel lbl_bat_val{tr("0 %")};
+
     QLabel lbl_temp{tr("Temperature: ")};
+    QLabel lbl_temp_val{tr("0 °C")};
+
     QLabel lbl_light{tr("Light Signals: ")};
 
     // * Sliders
