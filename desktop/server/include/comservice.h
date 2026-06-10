@@ -16,7 +16,13 @@ protected:
     std::atomic_bool m_is_running{false};
     std::atomic_bool m_is_connected{false};
 
+private:
+    bool insert_helper(int val, const char *sig_str);
+
 public:
+    // * Just for testing
+    void printBuffer() const;
+
     // * Destructor needed for inheritance
     virtual ~COMService() = default;
 
