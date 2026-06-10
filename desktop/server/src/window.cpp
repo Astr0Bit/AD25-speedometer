@@ -56,11 +56,15 @@ Window::Window()
                 { valLabel.setText(QString("%1 %2").arg(value).arg(unit)); });
     };
 
+    // * Get min, max values for each slider using Setting::Signal class
+    const auto &speed_info = Setting::Signal::handle()["speed"];
+    const auto &temp_info = Setting::Signal::handle()["temperature"];
+    const auto &bat_info = Setting::Signal::handle()["battery_level"];
+
     // * Add methods to the sliders
-    // TODO -> Get min, max values for each slider using Setting::Signal class
-    setupSlider(sld_speed, lbl_speed_val, "Kph", 0, 240);
-    setupSlider(sld_bat, lbl_bat_val, "%", 0, 100);
-    setupSlider(sld_temp, lbl_temp_val, "°C", -60, 60);
+    setupSlider(sld_bat, lbl_bat_val, "%", bat_info.min, bat_info.max);
+    setupSlider(sld_temp, lbl_temp_val, "°C", temp_info.min, temp_info.max);
+    setupSlider(sld_speed, lbl_speed_val, "Kph", speed_info.min, speed_info.max);
 
     // * Put the checkboxes within a separate layout
     // * Add the checkboxes
