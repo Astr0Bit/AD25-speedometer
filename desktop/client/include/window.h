@@ -9,6 +9,12 @@
 
 class Window : public QDialog
 {
+public:
+    explicit Window(QWidget *parent = nullptr);
+
+private:
+    Canvas *canvas_{nullptr};
+    QTimer blinkTimer_;
 };
 
 #endif
