@@ -50,13 +50,13 @@ namespace Setting {
         {
         }
 
-        signals_map_t build_map()
+        static signals_map_t build_map()
         {
             signals_map_t map;
-            const std::tuple<Info, std::string_view> signals[] SIGNALS;
-            for (size_t i = 0; i < sizeof(signals) / sizeof(signals[0]); ++i)
+            const std::tuple<Info, std::string_view> signals_tuple[] SIGNALS;
+            for (size_t i = 0; i < sizeof(signals_tuple) / sizeof(signals_tuple[0]); ++i)
             {
-                map[std::get<std::string_view>(signals[i])] = std::get<Info>(signals[i]);
+                map[std::get<std::string_view>(signals_tuple[i])] = std::get<Info>(signals_tuple[i]);
             }
             return map;
         }
