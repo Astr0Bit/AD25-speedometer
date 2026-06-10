@@ -10,12 +10,15 @@
 class COMService
 {
 protected:
-    // * Buffer mutex, and atomic variable for class
+    // * Buffer, mutex, and atomic variable for class
     uint8_t m_buf[SBUFLEN]{0};
     mutable std::mutex m_mtx;
     std::atomic_bool m_is_connected{false};
 
 public:
+    // * Destructor needed for inheritance
+    virtual ~COMService() = default;
+
     // * Methods for inserting:
     /**
      * @brief Insert speed (Kph) into buffer
