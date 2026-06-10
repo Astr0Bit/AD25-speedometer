@@ -7,7 +7,6 @@
 #define SBUFLEN 3 // The required number of bytes to pack the signals
 
 #ifdef __cplusplus
-#define NUM_SIGNALS 5
 #define SIGNALS {                       \
     {{8, 0, 0, 240}, "speed"},          \
     {{7, 8, -60, 60}, "temperature"},   \
@@ -17,13 +16,11 @@
 }
 
 #include <map>
-#include <tuple>
 #include <string>
+#include <tuple>
 
-namespace Setting
-{
-    class Signal
-    {
+namespace Setting {
+    class Signal {
     public:
         static const Signal& handle()
         {
@@ -37,43 +34,46 @@ namespace Setting
             int max;
         };
 
-        const Info& operator[](const std::string& key) const
+        const Info& operator[](std::string_view key) const
         {
-            return std::get<Info>(m_signals[m_signal_map.at(key)]);
+            return m_signal_map.at(key);
         }
 
     private:
+        using signals_map_t = std::map<std::string_view, Info>;
+
         Signal(const Signal&) = delete;
         Signal& operator=(const Signal&) = delete;
         Signal(Signal&&) = delete;
         Signal& operator=(Signal&&) = delete;
-        Signal() :
-            m_signals SIGNALS,
-            m_signal_map{
-                {std::get<std::string>(m_signals[0]), 0},
-                {std::get<std::string>(m_signals[1]), 1},
-                {std::get<std::string>(m_signals[2]), 2},
-                {std::get<std::string>(m_signals[3]), 3},
-                {std::get<std::string>(m_signals[4]), 4},
-            } {
+        Signal() : m_signal_map{build_map()}
+        {
         }
 
-        const std::tuple<Info, std::string> m_signals[NUM_SIGNALS];
-        const std::map<std::string, int> m_signal_map;
+        signals_map_t build_map()
+        {
+            signals_map_t map;
+            const std::tuple<Info, std::string_view> signals[] SIGNALS;
+            for (size_t i = 0; i < sizeof(signals) / sizeof(signals[0]); ++i)
+            {
+                map[std::get<std::string_view>(signals[i])] = std::get<Info>(signals[i]);
+            }
+            return map;
+        }
+
+        const signals_map_t m_signal_map;
     };
 
     constexpr int INTERVAL{40};
 
 #ifdef UARTCOM
-    namespace UART
-    {
+    namespace UART {
     }
 #else
-    namespace TCP
-    {
+    namespace TCP {
     }
 #endif
-}
+}  // namespace Setting
 #endif
 
-#endif // SETTING_H
+#endif  // SETTING_H
