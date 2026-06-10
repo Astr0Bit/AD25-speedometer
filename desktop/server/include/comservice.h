@@ -10,9 +10,10 @@
 class COMService
 {
 protected:
-    // * Buffer, mutex, and atomic variable for class
+    // * Buffer, mutex, and atomic variables for class
     uint8_t m_buf[SBUFLEN]{0};
     mutable std::mutex m_mtx;
+    std::atomic_bool m_is_running{false};
     std::atomic_bool m_is_connected{false};
 
 public:
@@ -23,33 +24,42 @@ public:
     /**
      * @brief Insert speed (Kph) into buffer
      *
-     * @param speed
+     * @param speed_kph
+     * @return true
+     * @return false
      */
-    void insertSpeed(uint8_t speed_kph);
+    bool insertSpeed(uint8_t speed_kph);
 
     /**
      * @brief Insert temperature (°C) into buffer
      *
-     * @param temp
+     * @param temp_c
+     * @return true
+     * @return false
      */
-    void insertTemp(int8_t temp_c);
+    bool insertTemp(int8_t temp_c);
 
     /**
      * @brief Insert battery level (%) into buffer
      *
      * @param bat_prc
+     * @return true
+     * @return false
      */
-    void insertBattery(uint8_t bat_prc);
+    bool insertBattery(uint8_t bat_prc);
 
     /**
      * @brief Insert light signals into buffer
      *
-     * @param is_on
+     * @param left
+     * @param right
+     * @return true
+     * @return false
      */
-    void insertLightSignals(bool left, bool right);
+    bool insertLightSignals(bool left, bool right);
 
     // * Send buffer
-    virtual void sendBuffer(void) = 0;
+    virtual bool sendBuffer(void) = 0;
 
     // * Get communication status
     virtual bool getStatus() const = 0;
