@@ -57,11 +57,19 @@ public:
      */
     void setLightSignals(bool left, bool right);
 
+    /**
+     * @brief Get communication status
+     *
+     * @return true Connected
+     * @return false Disconnected
+     */
+    bool getStatus() const
+    {
+        return m_is_connected;
+    };
+
     // * Send buffer
     virtual void run(void) = 0;
-
-    // * Get communication status
-    virtual bool getStatus() const = 0;
 };
 
 #endif
