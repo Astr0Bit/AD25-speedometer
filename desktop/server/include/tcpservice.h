@@ -8,6 +8,8 @@
 
 class TCPService : public COMService
 {
+    // * Just for testing
+    void run(void) override {};
 };
 
 #endif
