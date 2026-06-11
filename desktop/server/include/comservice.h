@@ -10,6 +10,9 @@
 class COMService
 {
 protected:
+    // * Constructor
+    COMService();
+
     // * Buffer, mutex, and atomic variables for class
     uint8_t m_buf[SBUFLEN]{0};
     mutable std::mutex m_mtx;
@@ -17,6 +20,8 @@ protected:
     std::atomic_bool m_is_connected{false};
 
 private:
+    const Setting::Signal &m_signal;
+
     bool insert_helper(int val, const char *sig_str);
 
 public:

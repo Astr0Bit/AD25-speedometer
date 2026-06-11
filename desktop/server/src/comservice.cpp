@@ -17,6 +17,9 @@ void COMService::printBuffer() const
               << std::bitset<8>(m_buf[0]) << std::endl;
 }
 
+// * Constructor
+COMService::COMService() : m_signal{Setting::Signal::handle()} {}
+
 // * Helper function
 // TODO -> Verify behavior
 // TODO -> Make this more dynamic using the SBUFLEN macro
@@ -28,7 +31,7 @@ bool COMService::insert_helper(int val, const char *sig_str)
     }
 
     // * Get min and max values for signal
-    const auto &signal_info = Setting::Signal::handle()[sig_str];
+    const auto &signal_info = m_signal[sig_str];
 
     // * Invalid range
     if ((val < signal_info.min) || (val > signal_info.max))
