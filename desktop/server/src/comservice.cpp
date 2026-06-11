@@ -1,8 +1,8 @@
 #include <climits>
 #include "comservice.h"
 
-// * Resources used:
-// * -
+// * Macros
+#define BYTE 8
 
 // * Just for testing
 #include <bitset>
@@ -22,7 +22,6 @@ COMService::COMService() : m_signal{Setting::Signal::handle()} {}
 
 // * Helper function
 // TODO -> Verify behavior
-// TODO -> Make this more dynamic using the SBUFLEN macro
 bool COMService::insert_helper(int val, const char *sig_str)
 {
     if (!m_is_running)
@@ -44,7 +43,12 @@ bool COMService::insert_helper(int val, const char *sig_str)
 
     // * Temporary 32-bit buffer
     // * NOTE: Most likely incorrect order
-    uint32_t temp_buf = (m_buf[2] << 16) | (m_buf[1] << 8) | m_buf[0];
+    uint32_t temp_buf{0};
+    uint32_t buf_size = SBUFLEN * BYTE;
+    for (int i = SBUFLEN; i >= 0; i--)
+    {
+        temp_buf |= (m_buf[i] << (buf_size - ((SBUFLEN - i) * BYTE)));
+    }
 
     // * Bitmask to both clear and insert
     uint32_t mask = (1 << signal_info.length) - 1;
@@ -56,9 +60,10 @@ bool COMService::insert_helper(int val, const char *sig_str)
     temp_buf |= ((val & mask) << signal_info.start);
 
     // * Write from temp_buf to m_buf
-    m_buf[0] = temp_buf & 0xFF;
-    m_buf[1] = (temp_buf >> 8) & 0xFF;
-    m_buf[2] = (temp_buf >> 16) & 0xFF;
+    for (int i = 0; i < SBUFLEN; i++)
+    {
+        m_buf[i] = (temp_buf >> (i * BYTE)) & 0xFF;
+    }
 
     return true;
 }
