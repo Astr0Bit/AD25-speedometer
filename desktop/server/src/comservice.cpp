@@ -18,6 +18,8 @@ void COMService::printBuffer() const
 }
 
 // * Helper function
+// TODO -> Verify behavior
+// TODO -> Make this more dynamic using the SBUFLEN macro
 bool COMService::insert_helper(int val, const char *sig_str)
 {
     if (!m_is_running)
