@@ -4,24 +4,8 @@
 // * Macros
 #define BYTE 8
 
-// * Just for testing
-#include <bitset>
-#include <iostream>
-void COMService::printBuffer() const
-{
-    std::lock_guard<std::mutex> lock(m_mtx);
-    std::cout << "Buffer (Bits 23 -> 0): \n";
-    // Print m_buf[2], then m_buf[1], then m_buf[0]
-    std::cout << std::bitset<8>(m_buf[2]) << " "
-              << std::bitset<8>(m_buf[1]) << " "
-              << std::bitset<8>(m_buf[0]) << std::endl;
-}
-
-// * Constructor
-COMService::COMService() : m_signal{Setting::Signal::handle()} {}
-
 // * Helper function
-// TODO -> Verify behavior
+// * NOTE: Works as intended
 bool COMService::insert_helper(int val, const char *sig_str)
 {
     if (!m_is_running)
@@ -42,7 +26,6 @@ bool COMService::insert_helper(int val, const char *sig_str)
     std::lock_guard<std::mutex> lock(m_mtx);
 
     // * Temporary 32-bit buffer
-    // * NOTE: Most likely incorrect order
     uint32_t temp_buf{0};
     uint32_t buf_size = SBUFLEN * BYTE;
     for (int i = SBUFLEN; i >= 0; i--)

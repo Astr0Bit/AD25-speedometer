@@ -10,8 +10,8 @@
 class COMService
 {
 protected:
-    // * Constructor
-    COMService();
+    // * Constructor -> Creates the singleton instance
+    COMService() : m_signal{Setting::Signal::handle()} {}
 
     // * Buffer, mutex, and atomic variables for class
     uint8_t m_buf[SBUFLEN]{0};
@@ -25,9 +25,6 @@ private:
     bool insert_helper(int val, const char *sig_str);
 
 public:
-    // * Just for testing
-    void printBuffer() const;
-
     // * Destructor needed for inheritance
     virtual ~COMService() = default;
 
