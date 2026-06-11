@@ -1,9 +1,6 @@
 #include <climits>
 #include "comservice.h"
 
-// * Macros
-#define BYTE 8
-
 // * Helper function
 // * NOTE: Works as intended
 void COMService::insert_helper(int val, const char *sig_str)
@@ -16,10 +13,12 @@ void COMService::insert_helper(int val, const char *sig_str)
 
     // * Temporary 32-bit buffer
     uint32_t temp_buf{0};
-    uint32_t buf_size = SBUFLEN * BYTE;
+    uint32_t buf_size = SBUFLEN * CHAR_BIT;
+
+    // * Fill up temporary buffer
     for (int i = SBUFLEN; i >= 0; i--)
     {
-        temp_buf |= (m_buf[i] << (buf_size - ((SBUFLEN - i) * BYTE)));
+        temp_buf |= (m_buf[i] << (buf_size - ((SBUFLEN - i) * CHAR_BIT)));
     }
 
     // * Bitmask to both clear and insert
@@ -34,7 +33,7 @@ void COMService::insert_helper(int val, const char *sig_str)
     // * Write from temp_buf to m_buf
     for (int i = 0; i < SBUFLEN; i++)
     {
-        m_buf[i] = (temp_buf >> (i * BYTE)) & 0xFF;
+        m_buf[i] = (temp_buf >> (i * CHAR_BIT)) & 0xFF;
     }
 }
 
