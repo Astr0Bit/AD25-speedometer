@@ -1,5 +1,6 @@
 #include <QtMath>
 #include "canvas.h"
+#include "setting.h"
 #include <QFileInfo>
 #include <QFont>
 #include <QFontDatabase>
@@ -16,6 +17,21 @@ namespace
     constexpr ushort TemperatureIcon = 0xe1ff;
     constexpr ushort LeftArrowIcon = 0xe5c4;
     constexpr ushort RightArrowIcon = 0xe5c8;
+
+    const Setting::Signal::Info &speedInfo()
+    {
+        return Setting::Signal::handle()["speed"];
+    }
+
+    const Setting::Signal::Info &temperatureInfo()
+    {
+        return Setting::Signal::handle()["temperature"];
+    }
+
+    const Setting::Signal::Info &batteryInfo()
+    {
+        return Setting::Signal::handle()["battery_level"];
+    }
 }
 
 Canvas::Canvas(QWidget *parent)
@@ -71,19 +87,22 @@ Canvas::~Canvas()
 
 void Canvas::setSpeed(int speed)
 {
-    speed_ = qBound(0, speed, 240);
+    const auto &info = speedInfo();
+    speed_ = qBound(info.min, speed, info.max);
     update();
 }
 
 void Canvas::setTemperature(int temperature)
 {
-    temperature_ = qBound(-60, temperature, 60);
+    const auto &info = temperatureInfo();
+    temperature_ = qBound(info.min, temperature, info.max);
     update();
 }
 
 void Canvas::setBatteryLevel(int batteryLevel)
 {
-    batteryLevel_ = qBound(0, batteryLevel, 100);
+    const auto &info = batteryInfo();
+    batteryLevel_ = qBound(info.min, batteryLevel, info.max);
     update();
 }
 
@@ -266,7 +285,10 @@ QPointF Canvas::pointOnGauge(const QPointF &center, qreal radius, int speed) con
     // First we convert speed to an angle, then we use sin/cos to get x and y.
     const qreal startAngle = 225.0;
     const qreal sweepAngle = 270.0;
-    const qreal angle = qDegreesToRadians(startAngle - (sweepAngle * speed / 240.0));
+    const auto &info = speedInfo();
+    const qreal speedRange = info.max - info.min;
+    const qreal speedRatio = speedRange == 0 ? 0.0 : (speed - info.min) / speedRange;
+    const qreal angle = qDegreesToRadians(startAngle - (sweepAngle * speedRatio));
     return QPointF(center.x() + qCos(angle) * radius,
                    center.y() - qSin(angle) * radius);
 }
@@ -284,7 +306,8 @@ void Canvas::drawGauge(QPainter &painter, const QRectF &rect) const
                            radius * 2, radius * 2),
                     225 * 16, -270 * 16);
 
-    for (int value = 0; value <= 240; value += 5)
+    const auto &speedLimit = speedInfo();
+    for (int value = speedLimit.min; value <= speedLimit.max; value += 5)
     {
         // Draw the small and big tick marks.
         // Small ticks are every 5 km/h. Big ticks and numbers are every 20 km/h.
@@ -395,10 +418,14 @@ void Canvas::drawSideIndicators(QPainter &painter, const QRectF &rect) const
     const QRectF batteryInner = batteryRect.adjusted(7, 7, -7, -7);
     // Fill the battery from bottom to top.
     // A high percent fills almost the whole battery. A low percent fills only the bottom.
+    const auto &batteryLimit = batteryInfo();
+    const qreal batteryRange = batteryLimit.max - batteryLimit.min;
+    const qreal batteryRatio = batteryRange == 0 ? 0.0 : (batteryLevel_ - batteryLimit.min) / batteryRange;
+    const qreal batteryFill = qBound(0.0, batteryRatio, 1.0);
     const QRectF batteryFillRect(batteryInner.left(),
-                                 batteryInner.top() + (batteryInner.height() * (100 - batteryLevel_) / 100.0),
+                                 batteryInner.top() + (batteryInner.height() * (1.0 - batteryFill)),
                                  batteryInner.width(),
-                                 batteryInner.height() * batteryLevel_ / 100.0);
+                                 batteryInner.height() * batteryFill);
     painter.setPen(Qt::NoPen);
     painter.setBrush(battery);
     painter.drawRoundedRect(batteryFillRect, 2, 2);
