@@ -16,13 +16,12 @@ protected:
     // * Buffer, mutex, and atomic variables for class
     uint8_t m_buf[SBUFLEN]{0};
     mutable std::mutex m_mtx;
-    std::atomic_bool m_is_running{false};
     std::atomic_bool m_is_connected{false};
 
 private:
     const Setting::Signal &m_signal;
 
-    bool insert_helper(int val, const char *sig_str);
+    void insert_helper(int val, const char *sig_str);
 
 public:
     // * Destructor needed for inheritance
@@ -32,42 +31,34 @@ public:
     /**
      * @brief Insert speed (Kph) into buffer
      *
-     * @param speed_kph
-     * @return true
-     * @return false
+     * @param speed_kph Speed in Kph (Kilometers per hour)
      */
-    bool insertSpeed(uint8_t speed_kph);
+    void setSpeed(uint8_t speed_kph);
 
     /**
      * @brief Insert temperature (°C) into buffer
      *
-     * @param temp_c
-     * @return true
-     * @return false
+     * @param temp_c Temperature in Celsius
      */
-    bool insertTemp(int8_t temp_c);
+    void setTemp(int8_t temp_c);
 
     /**
      * @brief Insert battery level (%) into buffer
      *
-     * @param bat_prc
-     * @return true
-     * @return false
+     * @param bat_prc Battery percentage
      */
-    bool insertBattery(uint8_t bat_prc);
+    void setBattery(uint8_t bat_prc);
 
     /**
      * @brief Insert light signals into buffer
      *
-     * @param left
-     * @param right
-     * @return true
-     * @return false
+     * @param left Left light
+     * @param right Right light
      */
-    bool insertLightSignals(bool left, bool right);
+    void setLightSignals(bool left, bool right);
 
     // * Send buffer
-    virtual bool sendBuffer(void) = 0;
+    virtual void run(void) = 0;
 
     // * Get communication status
     virtual bool getStatus() const = 0;

@@ -6,21 +6,10 @@
 
 // * Helper function
 // * NOTE: Works as intended
-bool COMService::insert_helper(int val, const char *sig_str)
+void COMService::insert_helper(int val, const char *sig_str)
 {
-    if (!m_is_running)
-    {
-        return false;
-    }
-
     // * Get min and max values for signal
     const auto &signal_info = m_signal[sig_str];
-
-    // * Invalid range
-    if ((val < signal_info.min) || (val > signal_info.max))
-    {
-        return false;
-    }
 
     // * Lock mutex to insert into buffer
     std::lock_guard<std::mutex> lock(m_mtx);
@@ -47,27 +36,25 @@ bool COMService::insert_helper(int val, const char *sig_str)
     {
         m_buf[i] = (temp_buf >> (i * BYTE)) & 0xFF;
     }
-
-    return true;
 }
 
-bool COMService::insertSpeed(uint8_t speed_kph)
+void COMService::setSpeed(uint8_t speed_kph)
 {
-    return insert_helper(speed_kph, "speed");
+    insert_helper(speed_kph, "speed");
 }
 
-bool COMService::insertTemp(int8_t temp_c)
+void COMService::setTemp(int8_t temp_c)
 {
-    return insert_helper(static_cast<int>(temp_c), "temperature");
+    insert_helper(static_cast<int>(temp_c), "temperature");
 }
 
-bool COMService::insertBattery(uint8_t bat_prc)
+void COMService::setBattery(uint8_t bat_prc)
 {
-    return insert_helper(bat_prc, "battery_level");
+    insert_helper(bat_prc, "battery_level");
 }
 
-bool COMService::insertLightSignals(bool left, bool right)
+void COMService::setLightSignals(bool left, bool right)
 {
-    return (insert_helper(static_cast<int>(left), "left_light") &&
-            insert_helper(static_cast<int>(right), "right_light"));
+    insert_helper(static_cast<int>(left), "left_light");
+    insert_helper(static_cast<int>(right), "right_light");
 }
