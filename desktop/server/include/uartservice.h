@@ -6,6 +6,8 @@
 
 class UARTService : public COMService, public QThread
 {
+    // * Just for testing
+    void run(void) override {};
 };
 
 #endif
