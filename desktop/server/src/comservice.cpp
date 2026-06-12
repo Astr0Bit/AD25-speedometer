@@ -16,7 +16,7 @@ void COMService::insert_helper(int val, const char *sig_str)
     uint32_t buf_size = SBUFLEN * CHAR_BIT;
 
     // * Fill up temporary buffer
-    for (int i = SBUFLEN; i >= 0; i--)
+    for (int i = (SBUFLEN - 1); i >= 0; i--)
     {
         temp_buf |= (m_buf[i] << (buf_size - ((SBUFLEN - i) * CHAR_BIT)));
     }
