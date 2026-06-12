@@ -1,6 +1,6 @@
 #include "window.h"
 #include "setting.h"
-#include <vector>
+#include <iostream>
 
 // * Resources used:
 // - https://doc.qt.io/qt-6/qtwidgets-widgets-sliders-example.html
@@ -14,13 +14,28 @@
 // - https://doc.qt.io/qt-6/qabstractbutton.html#checked-prop
 
 // * Helper function to make the grid
-void make_grid(QGridLayout &grid_layout, std::vector<std::vector<QWidget *>> &cols)
+template <size_t COLS, size_t ROWS>
+static void make_grid(QGridLayout &grid_layout, QWidget *(&cols)[COLS][ROWS])
 {
-    for (size_t col = 0; col < cols.size(); ++col)
+    // * Set grid spacing
+    grid_layout.setVerticalSpacing(0);
+    grid_layout.setContentsMargins(4, 0, 4, 0);
+
+    for (size_t col = 0; col < COLS; ++col)
     {
-        for (size_t row = 0; row < cols[col].size(); ++row)
+        for (size_t row = 0; row < ROWS; ++row)
         {
-            grid_layout.addWidget(cols[col][row], static_cast<int>(row), col, 1, 1);
+            QWidget *widget = cols[col][row];
+            if (!widget)
+                continue;
+
+            // * Set fixed width to the labels
+            if (QLabel *label = dynamic_cast<QLabel *>(widget))
+            {
+                label->setFixedWidth(120);
+            }
+
+            grid_layout.addWidget(widget, static_cast<int>(row), static_cast<int>(col), 1, 1);
         }
     }
 }
@@ -29,16 +44,16 @@ Window::Window()
 {
     // * NOTE: Could be improved with functions
 
-    // * Vector with all elements
-    std::vector<std::vector<QWidget *>> cols = {
+    // * Array with all elements
+    QWidget *cols[3][4] = {
         // * Text before each slider
         {&lbl_speed, &lbl_temp, &lbl_bat, &lbl_light},
 
         // * Sliders
-        {&sld_speed, &sld_temp, &sld_bat},
+        {&sld_speed, &sld_temp, &sld_bat, nullptr},
 
         // * Text after each slider
-        {&lbl_speed_val, &lbl_temp_val, &lbl_bat_val},
+        {&lbl_speed_val, &lbl_temp_val, &lbl_bat_val, nullptr},
     };
     make_grid(sld_layout, cols);
 
@@ -57,6 +72,7 @@ Window::Window()
     };
 
     // * Get min, max values for each slider using Setting::Signal class
+    // TODO -> Use singleton from COMService instead
     const auto &speed_info = Setting::Signal::handle()["speed"];
     const auto &temp_info = Setting::Signal::handle()["temperature"];
     const auto &bat_info = Setting::Signal::handle()["battery_level"];
