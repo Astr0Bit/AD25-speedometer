@@ -9,41 +9,26 @@
 class COMService
 {
 protected:
-    COMService();
+    std::mutex m_mtx;
+    std::atomic_bool m_status{false};
+    uint8_t m_buffer[SBUFLEN]{};
+
+    COMService() = default;
     virtual ~COMService() = default;
+    inline void setStatus(bool status) noexcept { m_status.store(status, std::memory_order_relaxed); }
 public:
 
-    void extractSpeed(uint8_t& out);
-    void extractTemp(int8_t& out);
-    void extractBattery(uint8_t& out);
-    void extractLightSignals(bool& out_left, bool& out_right);
+    void getSpeed(uint8_t& out);
+    void getTemp(int8_t& out);
+    void getBattery(uint8_t& out);
+    void getLightSignals(bool& outl, bool& outr);
+    inline bool getStatus() const noexcept { return m_status.load(std::memory_order_relaxed); }
 
-    virtual void receiveBuffer(void) = 0;
-    virtual bool getStatus() const = 0;
-
-protected:
-    std::atomic_bool m_is_connected{false};
-
-    class BufferGuard {
-    private:
-        friend class COMService;
-        BufferGuard(uint8_t(&buf)[SBUFLEN], std::mutex& mtx);
-        BufferGuard(BufferGuard&&) = default;
-        BufferGuard& operator=(BufferGuard&&) = default;
-
-        std::unique_lock<std::mutex> m_lock;
-    public:
-        uint8_t(&buffer)[SBUFLEN];
-    };
-
-    BufferGuard lockBuffer();
+    virtual void run() = 0;
 
 private:
-    std::mutex m_mtx;
-    uint8_t m_buffer[SBUFLEN]{};
-    const Setting::Signal& m_signal;
-
-    uint8_t extract_nbits(uint32_t n, uint32_t off);
+    uint64_t extract64(size_t byte_off);
+    template <typename T> T read(size_t bit_off, size_t bit_len);
 };
 
 #endif

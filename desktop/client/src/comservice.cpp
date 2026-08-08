@@ -1,55 +1,63 @@
 #include <climits>
 #include <cstring>
+#include <cassert>
 #include "comservice.h"
 
-COMService::COMService()
-    : m_signal{Setting::Signal::handle()}
+uint64_t COMService::extract64(size_t byte_off)
 {
+    std::unique_lock<std::mutex> lock{m_mtx, std::defer_lock};
+    uint64_t v{};
+    if (byte_off + 8 <= SBUFLEN)
+    {
+        lock.lock();
+        std::memcpy(&v, m_buffer + byte_off, 8);
+    }
+    else
+    {
+        const size_t n{SBUFLEN - byte_off};
+        lock.lock();
+        for (size_t i = 0; i < n; ++i)
+            v |= static_cast<uint64_t>(m_buffer[byte_off + i]) << (i << 3);
+    }
+    return v;
+}
+template <typename T>
+T COMService::read(size_t bit_off, size_t bit_len)
+{
+    const size_t byte_off = bit_off >> 3;
+    assert(byte_off <= SBUFLEN);
+    const uint64_t mask = (bit_len >= 64) ? ~0ULL : ((1ULL << bit_len) - 1);
+    uint64_t bits = (extract64(byte_off) >> (bit_off & 7)) & mask;
+    if constexpr (std::is_signed_v<T>)
+    {
+        if (bit_len > 0 && bit_len < 64)
+        {
+            const uint64_t sbit = 1ULL << (bit_len - 1);
+            bits = (bits ^ sbit) - sbit;
+        }
+    }
+    return static_cast<T>(bits);
 }
 
-COMService::BufferGuard::BufferGuard(uint8_t(&buf)[SBUFLEN], std::mutex& mtx)
-    : buffer{buf}, m_lock{mtx}
+void COMService::getSpeed(uint8_t& out)
 {
+    const auto& si = Setting::Signal::handle()["speed"];
+    out = read<uint8_t>(si.start, si.length);
 }
-
-COMService::BufferGuard COMService::lockBuffer()
+void COMService::getTemp(int8_t& out)
 {
-    return COMService::BufferGuard{m_buffer, m_mtx};
+    const auto& si = Setting::Signal::handle()["temperature"];
+    out = read<int8_t>(si.start, si.length);
 }
-
-inline uint8_t COMService::extract_nbits(uint32_t bit_len, uint32_t bit_start)
+void COMService::getBattery(uint8_t& out)
 {
-    auto locked = lockBuffer();
-    const uint32_t byte_idx = bit_start >> 3;
-    const uint32_t bit_off = bit_start & 7U;
-
-    const uint16_t lo = (uint16_t)locked.buffer[byte_idx];
-    const uint16_t hi = (bit_off + bit_len > 8U ? (uint16_t)locked.buffer[byte_idx + 1] << 8 : 0U);
-
-    return (uint8_t)(((lo | hi) >> bit_off) & ((1U << bit_len) - 1U));
+    const auto& si = Setting::Signal::handle()["battery_level"];
+    out = read<uint8_t>(si.start, si.length);
 }
-
-void COMService::extractSpeed(uint8_t& out)
+void COMService::getLightSignals(bool& outl, bool& outr)
 {
-    const auto& si = m_signal["speed"];
-    out = extract_nbits(si.length, si.start);
-}
-void COMService::extractTemp(int8_t& out)
-{
-    const auto& si = m_signal["temperature"];
-    const uint8_t raw = extract_nbits(si.length, si.start);
-    const uint8_t sign_bit = static_cast<uint8_t>(1U << (si.length - 1));
-    out = static_cast<int8_t>((raw ^ sign_bit) - sign_bit);
-}
-void COMService::extractBattery(uint8_t& out)
-{
-    const auto& si = m_signal["battery_level"];
-    out = extract_nbits(si.length, si.start);
-}
-void COMService::extractLightSignals(bool& out_left, bool& out_right)
-{
-    const auto& si_l = m_signal["left_light"];
-    const auto& si_r = m_signal["right_light"];
-    out_left = !!extract_nbits(si_l.length, si_l.start);
-    out_right = !!extract_nbits(si_r.length, si_r.start);
+    const auto& si_l = Setting::Signal::handle()["left_light"];
+    const auto& si_r = Setting::Signal::handle()["right_light"];
+    outl = read<bool>(si_l.start, si_l.length);
+    outr = read<bool>(si_r.start, si_r.length);
 }
