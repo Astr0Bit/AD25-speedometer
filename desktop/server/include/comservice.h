@@ -10,27 +10,15 @@
 class COMService
 {
 protected:
-    // * Constructor -> Creates the singleton instance
-    COMService() : m_signal{Setting::Signal::handle()} {}
-
     // * Buffer, mutex, and atomic variables for class
     uint8_t m_buf[SBUFLEN]{0};
     mutable std::mutex m_mtx;
-    std::atomic_bool m_is_connected{false};
+    std::atomic_bool m_status{false};
 
 private:
-    const Setting::Signal &m_signal;
-
     void insert_helper(int val, const char *sig_str);
 
 public:
-    /**
-     * @brief Get the Signal singleton handler
-     *
-     * @return const Setting::Signal&
-     */
-    const Setting::Signal &getSignal() const;
-
     // * Destructor needed for inheritance
     virtual ~COMService() = default;
 
@@ -72,7 +60,7 @@ public:
      */
     bool getStatus() const
     {
-        return m_is_connected;
+        return m_status;
     };
 
     // * Send buffer

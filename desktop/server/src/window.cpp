@@ -81,10 +81,9 @@ Window::Window(COMService &com_service) : m_com_service(com_service)
     };
 
     // Get min, max values for each slider using Setting::Signal class
-    const auto &signal_handler = com_service.getSignal();
-    const auto &speed_info = signal_handler["speed"];
-    const auto &temp_info = signal_handler["temperature"];
-    const auto &bat_info = signal_handler["battery_level"];
+    const auto &speed_info = Setting::Signal::handle()["speed"];
+    const auto &temp_info = Setting::Signal::handle()["temperature"];
+    const auto &bat_info = Setting::Signal::handle()["battery_level"];
 
     // Add methods to the sliders
     setupSlider(sld_bat, lbl_bat_val, "%", bat_info.min, bat_info.max, &COMService::setBattery);
