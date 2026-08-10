@@ -1,4 +1,5 @@
 #include <climits>
+#include "setting.h"
 #include "comservice.h"
 
 // * Helper function
@@ -6,7 +7,7 @@
 void COMService::insert_helper(int val, const char *sig_str)
 {
     // * Get min and max values for signal
-    const auto &signal_info = m_signal[sig_str];
+    const auto &signal_info = Setting::Signal::handle()[sig_str];
 
     // * Lock mutex to insert into buffer
     std::lock_guard<std::mutex> lock(m_mtx);
