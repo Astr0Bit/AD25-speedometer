@@ -18,7 +18,7 @@ private:
      * @brief Main thread for TCPService, reads the buffer, and periodically sends it over TCP / IP
      *
      */
-    void serverWorker(void);
+    void serverWorker(int sockfd);
 
 public:
     /**

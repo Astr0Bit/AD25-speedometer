@@ -8,70 +8,106 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 
-class TCPService : public COMService
+// Private
+void TCPService::serverWorker(int sockfd)
 {
-    private:
-    void serverWorker(void) {
-        
-    }
-
-    public:
-    void run(void) override
+    if (0 == listen(sockfd, N_CONNS))
     {
-        // Attempt to create the TCP / IP socket
-        int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-        if (sockfd == -1)
+        std::cout << "Listening for incoming connections...\n";
+
+        // Outer loop -> Constantly checks for new incomming connection requests
+        while (true)
         {
-            std::cout << "Failed to create TCP/IP socket, exiting...\n";
-            std::exit(EXIT_FAILURE);
-        }
+            // Grab IP and length of incomming packet
+            sockaddr_in cli{};
+            socklen_t len = sizeof(cli);
 
-        // Create an internet socket address
-        sockaddr_in servaddr{0};
+            int connfd = accept(sockfd, (sockaddr *)&cli, &len);
 
-        // Assign IP and PORT
-        servaddr.sin_family = AF_INET;
-        servaddr.sin_port = htons(PORT);
-        servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-        // Bind the socket address to the socket
-        if (0 == bind(sockfd, (sockaddr *)&servaddr, sizeof(servaddr)))
-        {
-            // TODO -> Likely to be put in a thread instead, ie. constantly listen
-            // TODO -> What if the connection silently drops?
-            if (0 == listen(sockfd, N_CONNS))
+            // Established connection
+            if (connfd >= 0)
             {
-                // Grab IP and length of incomming packet
-                sockaddr_in cli{0};
-                socklen_t len = sizeof(cli);
+                std::cout << "Server accepted the client...\n";
+                m_status.store(true);
 
-                int connfd = accept(sockfd, (sockaddr *)&cli, &len);
-
-                // Established connection
-                if (connfd >= 0)
+                while (true)
                 {
-                    std::cout << "Server accepted the client...\n";
-                    m_is_connected = true;
+                    // * Periodically send the COMService buffer
 
-                    // TODO -> Periodically send the COMService buffer
+                    // Wait x milliseconds before sending the packet
+                    std::this_thread::sleep_for(std::chrono::milliseconds(SEND_INTERVAL_MS));
+
+                    ssize_t bytes_sent = 0;
+
+                    // Scope to lock the mutex, which is automatically released when it goes out of scope
+                    {
+                        std::lock_guard<std::mutex> lock(m_mtx);
+
+                        // Send the buffer
+                        bytes_sent = send(connfd, m_buf, SBUFLEN, MSG_NOSIGNAL);
+                    }
+
+                    // In case the connection silently drops
+                    if (bytes_sent <= 0)
+                    {
+                        std::cout << "Connection lost\n";
+                        m_status.store(false);
+                        break; // Drops down to the shutdown and close section
+                    }
                 }
-                else
-                {
-                    std::cout << "Failed to accept the connection...\n";
-                }
+
+                // Close the connection
+                shutdown(connfd, SHUT_RDWR);
+                close(connfd);
             }
             else
             {
-                std::cout << "Failed to listen to the port...\n";
+                std::cout << "Failed to accept the connection...\n";
             }
         }
-        else
-        {
-            std::cout << "Failed to bind servaddr to the socket...\n";
-        }
+    }
+    else
+    {
+        std::cout << "Failed to listen to the port...\n";
+    }
 
-        // Close the socket
-        shutdown(sockfd, SHUT_RDWR);
-        close(sockfd);
+    // Close the socket
+    shutdown(sockfd, SHUT_RDWR);
+    close(sockfd);
+}
+
+// Public
+void TCPService::run(void)
+{
+    // Attempt to create the TCP / IP socket
+    int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    if (sockfd == -1)
+    {
+        std::cout << "Failed to create TCP/IP socket, exiting...\n";
+        std::exit(EXIT_FAILURE);
+    }
+    else
+    {
+        std::cout << "Created TCP/IP socket\n";
+    }
+
+    // Create an internet socket address
+    sockaddr_in servaddr{};
+
+    // Assign IP and PORT
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(PORT);
+    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    // Bind the socket address to the socket
+    if (0 == bind(sockfd, (sockaddr *)&servaddr, sizeof(servaddr)))
+    {
+        // Spawn a detached thread for the TCP/IP communication
+        std::cout << "Spawned TCP/IP server worker thread\n";
+        std::thread(&TCPService::serverWorker, this, sockfd).detach();
+    }
+    else
+    {
+        std::cout << "Failed to bind servaddr to the socket...\n";
     }
 }
