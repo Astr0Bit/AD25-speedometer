@@ -18,34 +18,21 @@
 #include <map>
 #include <string>
 #include <tuple>
+#include <cstdint>
+#include <cassert>
 
 namespace Setting {
     class Signal {
-    public:
-        static const Signal& handle()
-        {
-            static Signal instance;
-            return instance;
-        }
         struct Info {
-            int length;
-            int start;
-            int min;
-            int max;
+            uint32_t length;
+            uint32_t start;
+            int32_t min;
+            int32_t max;
         };
-
-        const Info& operator[](std::string_view key) const
-        {
-            return m_signal_map.at(key);
-        }
-
-    private:
         using signals_map_t = std::map<std::string_view, Info>;
 
-        Signal(const Signal&) = delete;
-        Signal& operator=(const Signal&) = delete;
-        Signal(Signal&&) = delete;
-        Signal& operator=(Signal&&) = delete;
+        const signals_map_t m_signal_map;
+
         Signal() : m_signal_map{build_map()}
         {
         }
@@ -56,12 +43,25 @@ namespace Setting {
             const std::tuple<Info, std::string_view> signals_tuple[] SIGNALS;
             for (size_t i = 0; i < sizeof(signals_tuple) / sizeof(signals_tuple[0]); ++i)
             {
-                map[std::get<std::string_view>(signals_tuple[i])] = std::get<Info>(signals_tuple[i]);
+                std::string_view key = std::get<std::string_view>(signals_tuple[i]);
+                const Info& val = std::get<Info>(signals_tuple[i]);
+                assert(SBUFLEN >= (((val.start + val.length + 7) & ~7) >> 3));
+                map[key] = val;
             }
             return map;
         }
 
-        const signals_map_t m_signal_map;
+    public:
+        static const Signal& handle()
+        {
+            static Signal instance;
+            return instance;
+        }
+
+        const Info& operator[](std::string_view key) const
+        {
+            return m_signal_map.at(key);
+        }
     };
 
     constexpr int INTERVAL{40};
