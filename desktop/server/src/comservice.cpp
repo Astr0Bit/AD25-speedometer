@@ -1,5 +1,11 @@
 #include <climits>
+#include "setting.h"
 #include "comservice.h"
+
+const Setting::Signal &COMService::getSignal() const
+{
+    return m_signal;
+}
 
 // * Helper function
 // * NOTE: Works as intended

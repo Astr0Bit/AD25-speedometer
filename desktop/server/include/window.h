@@ -39,9 +39,12 @@ private:
     QCheckBox box_right{"Right"};
     QCheckBox box_warning{"Warning"};
 
+    // * COMService reference (singleton)
+    COMService &m_com_service;
+
 public:
     // * Window and element placement created here
-    Window();
+    Window(COMService &com_service);
 };
 
 #endif

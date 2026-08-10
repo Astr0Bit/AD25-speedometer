@@ -1,4 +1,5 @@
 #include "window.h"
+#include "tcpservice.h"
 #include <QApplication>
 
 int main(int argc, char **argv)
@@ -9,7 +10,10 @@ int main(int argc, char **argv)
     QFont defaultFont("Arial", 10, QFont::Normal);
     app.setFont(defaultFont);
 
-    Window window;
+    // * NOTE -> This should be self-determined
+    TCPService tcp_service;
+
+    Window window(tcp_service);
     window.show();
 
     return app.exec();

@@ -24,6 +24,13 @@ private:
     void insert_helper(int val, const char *sig_str);
 
 public:
+    /**
+     * @brief Get the Signal singleton handler
+     *
+     * @return const Setting::Signal&
+     */
+    const Setting::Signal &getSignal() const;
+
     // * Destructor needed for inheritance
     virtual ~COMService() = default;
 
