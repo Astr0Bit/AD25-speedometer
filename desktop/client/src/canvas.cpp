@@ -18,17 +18,17 @@ namespace
     constexpr ushort LeftArrowIcon = 0xe5c4;
     constexpr ushort RightArrowIcon = 0xe5c8;
 
-    const Setting::Signal::Info &speedInfo()
+    const auto &speedInfo()
     {
         return Setting::Signal::handle()["speed"];
     }
 
-    const Setting::Signal::Info &temperatureInfo()
+    const auto &temperatureInfo()
     {
         return Setting::Signal::handle()["temperature"];
     }
 
-    const Setting::Signal::Info &batteryInfo()
+    const auto &batteryInfo()
     {
         return Setting::Signal::handle()["battery_level"];
     }
