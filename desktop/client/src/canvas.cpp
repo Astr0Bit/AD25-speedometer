@@ -9,29 +9,26 @@
 #include <QDir>
 #include <QStandardPaths>
 
-namespace
+constexpr ushort SpeedIcon = 0xe9e4;
+constexpr ushort BatteryIcon = 0xebdc;
+constexpr ushort ErrorIcon = 0xe628;
+constexpr ushort TemperatureIcon = 0xe1ff;
+constexpr ushort LeftArrowIcon = 0xe5c4;
+constexpr ushort RightArrowIcon = 0xe5c8;
+
+const auto &speedInfo()
 {
-    constexpr ushort SpeedIcon = 0xe9e4;
-    constexpr ushort BatteryIcon = 0xebdc;
-    constexpr ushort ErrorIcon = 0xe628;
-    constexpr ushort TemperatureIcon = 0xe1ff;
-    constexpr ushort LeftArrowIcon = 0xe5c4;
-    constexpr ushort RightArrowIcon = 0xe5c8;
+    return Setting::Signal::handle()["speed"];
+}
 
-    const auto &speedInfo()
-    {
-        return Setting::Signal::handle()["speed"];
-    }
+const auto &temperatureInfo()
+{
+    return Setting::Signal::handle()["temperature"];
+}
 
-    const auto &temperatureInfo()
-    {
-        return Setting::Signal::handle()["temperature"];
-    }
-
-    const auto &batteryInfo()
-    {
-        return Setting::Signal::handle()["battery_level"];
-    }
+const auto &batteryInfo()
+{
+    return Setting::Signal::handle()["battery_level"];
 }
 
 Canvas::Canvas(QWidget *parent)
@@ -477,5 +474,4 @@ void Canvas::drawCommunication(QPainter &painter, const QRectF &rect) const
     painter.setFont(statusFont);
     painter.drawText(QRectF(rect.left(), rect.top() + 34, rect.width(), 22),
                      Qt::AlignCenter, "Connection Error");
-
 }
