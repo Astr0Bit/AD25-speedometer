@@ -9,13 +9,7 @@
 #include <QDir>
 #include <QStandardPaths>
 
-constexpr ushort SpeedIcon = 0xe9e4;
-constexpr ushort BatteryIcon = 0xebdc;
-constexpr ushort ErrorIcon = 0xe628;
-constexpr ushort TemperatureIcon = 0xe1ff;
-constexpr ushort LeftArrowIcon = 0xe5c4;
-constexpr ushort RightArrowIcon = 0xe5c8;
-
+// Helper functions for getting Info structs for the required signals
 const auto &speedInfo()
 {
     return Setting::Signal::handle()["speed"];
@@ -37,38 +31,38 @@ Canvas::Canvas(QWidget *parent)
     const int fontId = QFontDatabase::addApplicationFont("desktop/client/res/MaterialIcons.ttf");
     if (fontId != -1)
     {
-        iconFontFamily_ = QFontDatabase::applicationFontFamilies(fontId).value(0, iconFontFamily_);
+        m_iconFontFamily = QFontDatabase::applicationFontFamilies(fontId).value(0, m_iconFontFamily);
     }
 
     const QString appDir = QCoreApplication::applicationDirPath();
     const QString resDir = QDir::cleanPath(appDir + "/../desktop/client/res");
-    leftSignalSoundPath_ = QDir::cleanPath(appDir + "/sound_left.wav");
-    rightSignalSoundPath_ = QDir::cleanPath(appDir + "/sound_right.wav");
-    warningSignalSoundPath_ = QDir::cleanPath(appDir + "/sound_warning.wav");
-    if (!QFileInfo::exists(leftSignalSoundPath_))
+    m_leftSignalSoundPath = QDir::cleanPath(appDir + "/sound_left.wav");
+    m_rightSignalSoundPath = QDir::cleanPath(appDir + "/sound_right.wav");
+    m_warningSignalSoundPath = QDir::cleanPath(appDir + "/sound_warning.wav");
+    if (!QFileInfo::exists(m_leftSignalSoundPath))
     {
-        leftSignalSoundPath_ = QDir::cleanPath(resDir + "/sound_left.wav");
+        m_leftSignalSoundPath = QDir::cleanPath(resDir + "/sound_left.wav");
     }
-    if (!QFileInfo::exists(rightSignalSoundPath_))
+    if (!QFileInfo::exists(m_rightSignalSoundPath))
     {
-        rightSignalSoundPath_ = QDir::cleanPath(resDir + "/sound_right.wav");
+        m_rightSignalSoundPath = QDir::cleanPath(resDir + "/sound_right.wav");
     }
-    if (!QFileInfo::exists(warningSignalSoundPath_))
+    if (!QFileInfo::exists(m_warningSignalSoundPath))
     {
-        warningSignalSoundPath_ = QDir::cleanPath(resDir + "/sound_warning.wav");
+        m_warningSignalSoundPath = QDir::cleanPath(resDir + "/sound_warning.wav");
     }
-    leftSignalSoundPath_ = QFileInfo(leftSignalSoundPath_).absoluteFilePath();
-    rightSignalSoundPath_ = QFileInfo(rightSignalSoundPath_).absoluteFilePath();
-    warningSignalSoundPath_ = QFileInfo(warningSignalSoundPath_).absoluteFilePath();
-    signalSoundCommand_ = QStandardPaths::findExecutable("pw-play");
-    if (signalSoundCommand_.isEmpty())
+    m_leftSignalSoundPath = QFileInfo(m_leftSignalSoundPath).absoluteFilePath();
+    m_rightSignalSoundPath = QFileInfo(m_rightSignalSoundPath).absoluteFilePath();
+    m_warningSignalSoundPath = QFileInfo(m_warningSignalSoundPath).absoluteFilePath();
+    m_signalSoundCommand = QStandardPaths::findExecutable("pw-play");
+    if (m_signalSoundCommand.isEmpty())
     {
-        signalSoundCommand_ = QStandardPaths::findExecutable("aplay");
+        m_signalSoundCommand = QStandardPaths::findExecutable("aplay");
     }
-    connect(&signalSoundProcess_, &QProcess::finished, this,
+    connect(&m_signalSoundProcess, &QProcess::finished, this,
             [this](int, QProcess::ExitStatus)
             {
-                if (!stoppingSignalSound_ && hasActiveLightSignal())
+                if (!m_stoppingSignalSound && hasActiveLightSignal())
                 {
                     startSignalSound();
                 }
@@ -85,42 +79,42 @@ Canvas::~Canvas()
 void Canvas::setSpeed(int speed)
 {
     const auto &info = speedInfo();
-    speed_ = qBound(info.min, speed, info.max);
+    m_speed = qBound(info.min, speed, info.max);
     update();
 }
 
 void Canvas::setTemperature(int temperature)
 {
     const auto &info = temperatureInfo();
-    temperature_ = qBound(info.min, temperature, info.max);
+    m_temperature = qBound(info.min, temperature, info.max);
     update();
 }
 
 void Canvas::setBatteryLevel(int batteryLevel)
 {
     const auto &info = batteryInfo();
-    batteryLevel_ = qBound(info.min, batteryLevel, info.max);
+    m_batteryLevel = qBound(info.min, batteryLevel, info.max);
     update();
 }
 
 void Canvas::setLightSignals(bool leftLight, bool rightLight, bool warningLight)
 {
-    leftLight_ = leftLight;
-    rightLight_ = rightLight;
-    warningLight_ = warningLight;
+    m_leftLight = leftLight;
+    m_rightLight = rightLight;
+    m_warningLight = warningLight;
 
     // This checks which light signal is active now.
     // If it changed, we stop the old sound and start the correct new sound.
     const SignalSound newSound = selectedSignalSound();
     if (newSound == SignalSound::None)
     {
-        activeSignalSound_ = SignalSound::None;
+        m_activeSignalSound = SignalSound::None;
         stopSignalSound();
     }
-    else if (newSound != activeSignalSound_)
+    else if (newSound != m_activeSignalSound)
     {
         stopSignalSound();
-        activeSignalSound_ = newSound;
+        m_activeSignalSound = newSound;
         startSignalSound();
     }
     else
@@ -132,18 +126,18 @@ void Canvas::setLightSignals(bool leftLight, bool rightLight, bool warningLight)
 
 void Canvas::setCommunicationStatus(bool connected, const QString &message)
 {
-    connected_ = connected;
-    communicationMessage_ = message;
+    m_connected = connected;
+    m_communicationMessage = message;
 
-    if (!connected_)
+    if (!m_connected)
     {
-        speed_ = 0;
-        temperature_ = 0;
-        batteryLevel_ = 0;
-        leftLight_ = false;
-        rightLight_ = false;
-        warningLight_ = false;
-        activeSignalSound_ = SignalSound::None;
+        m_speed = 0;
+        m_temperature = 0;
+        m_batteryLevel = 0;
+        m_leftLight = false;
+        m_rightLight = false;
+        m_warningLight = false;
+        m_activeSignalSound = SignalSound::None;
         stopSignalSound();
     }
 
@@ -152,7 +146,7 @@ void Canvas::setCommunicationStatus(bool connected, const QString &message)
 
 void Canvas::setBlinkVisible(bool visible)
 {
-    blinkVisible_ = visible;
+    m_blinkVisible = visible;
     update();
 }
 
@@ -181,11 +175,11 @@ void Canvas::paintEvent(QPaintEvent *event)
 
 QColor Canvas::temperatureColor() const
 {
-    if (temperature_ < 5)
+    if (m_temperature < 5)
     {
         return QColor(245, 247, 250);
     }
-    if (temperature_ <= 39)
+    if (m_temperature <= 39)
     {
         return QColor(48, 150, 255);
     }
@@ -194,11 +188,11 @@ QColor Canvas::temperatureColor() const
 
 QColor Canvas::batteryColor() const
 {
-    if (batteryLevel_ < 25)
+    if (m_batteryLevel < 25)
     {
         return QColor(235, 76, 92);
     }
-    if (batteryLevel_ <= 49)
+    if (m_batteryLevel <= 49)
     {
         return QColor(240, 196, 65);
     }
@@ -207,7 +201,7 @@ QColor Canvas::batteryColor() const
 
 bool Canvas::hasActiveLightSignal() const
 {
-    return leftLight_ || rightLight_ || warningLight_;
+    return m_leftLight || m_rightLight || m_warningLight;
 }
 
 Canvas::SignalSound Canvas::selectedSignalSound() const
@@ -215,15 +209,15 @@ Canvas::SignalSound Canvas::selectedSignalSound() const
     // Decide which sound should be used.
     // Warning means both arrows, so it uses the normal stereo sound.
     // Left and right use separate sound files.
-    if (warningLight_ || (leftLight_ && rightLight_))
+    if (m_warningLight || (m_leftLight && m_rightLight))
     {
         return SignalSound::Warning;
     }
-    if (leftLight_)
+    if (m_leftLight)
     {
         return SignalSound::Left;
     }
-    if (rightLight_)
+    if (m_rightLight)
     {
         return SignalSound::Right;
     }
@@ -237,11 +231,11 @@ QString Canvas::soundPathFor(SignalSound sound) const
     switch (sound)
     {
     case SignalSound::Left:
-        return leftSignalSoundPath_;
+        return m_leftSignalSoundPath;
     case SignalSound::Right:
-        return rightSignalSoundPath_;
+        return m_rightSignalSoundPath;
     case SignalSound::Warning:
-        return warningSignalSoundPath_;
+        return m_warningSignalSoundPath;
     case SignalSound::None:
         return {};
     }
@@ -251,27 +245,27 @@ QString Canvas::soundPathFor(SignalSound sound) const
 
 void Canvas::stopSignalSound()
 {
-    stoppingSignalSound_ = true;
-    if (signalSoundProcess_.state() != QProcess::NotRunning)
+    m_stoppingSignalSound = true;
+    if (m_signalSoundProcess.state() != QProcess::NotRunning)
     {
-        signalSoundProcess_.kill();
-        signalSoundProcess_.waitForFinished(100);
+        m_signalSoundProcess.kill();
+        m_signalSoundProcess.waitForFinished(100);
     }
-    stoppingSignalSound_ = false;
+    m_stoppingSignalSound = false;
 }
 
 void Canvas::startSignalSound()
 {
-    if (signalSoundCommand_.isEmpty())
+    if (m_signalSoundCommand.isEmpty())
     {
         return;
     }
-    if (signalSoundProcess_.state() == QProcess::NotRunning)
+    if (m_signalSoundProcess.state() == QProcess::NotRunning)
     {
-        const QString soundPath = soundPathFor(activeSignalSound_);
+        const QString soundPath = soundPathFor(m_activeSignalSound);
         if (!soundPath.isEmpty())
         {
-            signalSoundProcess_.start(signalSoundCommand_, {soundPath});
+            m_signalSoundProcess.start(m_signalSoundCommand, {soundPath});
         }
     }
 }
@@ -332,14 +326,14 @@ void Canvas::drawGauge(QPainter &painter, const QRectF &rect) const
 
     drawNeedle(painter, center, radius);
 
-    if (connected_)
+    if (m_connected)
     {
         painter.setPen(Qt::white);
-        QFont iconFont(iconFontFamily_);
+        QFont iconFont(m_iconFontFamily);
         iconFont.setPointSize(32);
         painter.setFont(iconFont);
         painter.drawText(QRectF(center.x() - 28, center.y() + 45, 56, 44),
-                         Qt::AlignCenter, QString(QChar(SpeedIcon)));
+                         Qt::AlignCenter, QString(QChar(m_SpeedIcon)));
 
         QFont unitFont = painter.font();
         unitFont.setFamily("Sans Serif");
@@ -347,7 +341,7 @@ void Canvas::drawGauge(QPainter &painter, const QRectF &rect) const
         unitFont.setBold(true);
         painter.setFont(unitFont);
         painter.drawText(QRectF(center.x() - 82, center.y() + 88, 164, 34),
-                         Qt::AlignCenter, QString("%1 km/h").arg(speed_));
+                         Qt::AlignCenter, QString("%1 km/h").arg(m_speed));
     }
     else
     {
@@ -359,7 +353,7 @@ void Canvas::drawNeedle(QPainter &painter, const QPointF &center, qreal radius) 
 {
     // Draw the red needle.
     // The needle tip is placed on the gauge using the current speed value.
-    const QPointF tip = pointOnGauge(center, radius - 36, speed_);
+    const QPointF tip = pointOnGauge(center, radius - 36, m_speed);
     const qreal angle = qAtan2(center.y() - tip.y(), tip.x() - center.x());
     const QPointF normal(-qSin(angle), -qCos(angle));
     const QPointF base(center.x() - qCos(angle) * 4, center.y() + qSin(angle) * 4);
@@ -383,22 +377,22 @@ void Canvas::drawSideIndicators(QPainter &painter, const QRectF &rect) const
 {
     // Draw left and right arrows.
     // They are weak green when inactive and bright green when they blink.
-    const bool showLeft = blinkVisible_ && (leftLight_ || warningLight_);
-    const bool showRight = blinkVisible_ && (rightLight_ || warningLight_);
+    const bool showLeft = m_blinkVisible && (m_leftLight || m_warningLight);
+    const bool showRight = m_blinkVisible && (m_rightLight || m_warningLight);
     const QColor activeGreen(0, 240, 20);
     const QColor inactiveGreen(0, 240, 20, 55);
 
-    QFont iconFont(iconFontFamily_);
+    QFont iconFont(m_iconFontFamily);
     iconFont.setPointSize(34);
     painter.setFont(iconFont);
 
     painter.setPen(showRight ? activeGreen : inactiveGreen);
     painter.drawText(QRectF(rect.right() - 76, rect.top() + 28, 58, 52),
-                     Qt::AlignCenter, QString(QChar(RightArrowIcon)));
+                     Qt::AlignCenter, QString(QChar(m_RightArrowIcon)));
 
     painter.setPen(showLeft ? activeGreen : inactiveGreen);
     painter.drawText(QRectF(rect.left() + 18, rect.top() + 28, 58, 52),
-                     Qt::AlignCenter, QString(QChar(LeftArrowIcon)));
+                     Qt::AlignCenter, QString(QChar(m_LeftArrowIcon)));
 
     const QColor battery = batteryColor();
     const QRectF batteryRect(rect.right() - 92, rect.top() + 150, 46, 86);
@@ -419,7 +413,7 @@ void Canvas::drawSideIndicators(QPainter &painter, const QRectF &rect) const
     // A high percent fills almost the whole battery. A low percent fills only the bottom.
     const auto &batteryLimit = batteryInfo();
     const qreal batteryRange = batteryLimit.max - batteryLimit.min;
-    const qreal batteryRatio = batteryRange == 0 ? 0.0 : (batteryLevel_ - batteryLimit.min) / batteryRange;
+    const qreal batteryRatio = batteryRange == 0 ? 0.0 : (m_batteryLevel - batteryLimit.min) / batteryRange;
     const qreal batteryFill = qBound(0.0, batteryRatio, 1.0);
     const QRectF batteryFillRect(batteryInner.left(),
                                  batteryInner.top() + (batteryInner.height() * (1.0 - batteryFill)),
@@ -437,29 +431,29 @@ void Canvas::drawSideIndicators(QPainter &painter, const QRectF &rect) const
     painter.setPen(Qt::white);
     painter.drawText(QRectF(batteryRect.left() - 6, batteryRect.bottom() + 2,
                             batteryRect.width() + 12, 26),
-                     Qt::AlignCenter, QString("%1%").arg(batteryLevel_));
+                     Qt::AlignCenter, QString("%1%").arg(m_batteryLevel));
 
-    QFont tempIconFont(iconFontFamily_);
+    QFont tempIconFont(m_iconFontFamily);
     tempIconFont.setPointSize(42);
     painter.setFont(tempIconFont);
     painter.setPen(temperatureColor());
     painter.drawText(QRectF(batteryRect.left(), rect.bottom() - 104,
                             batteryRect.width(), 56),
-                     Qt::AlignCenter, QString(QChar(TemperatureIcon)));
+                     Qt::AlignCenter, QString(QChar(m_TemperatureIcon)));
 
     painter.setFont(textFont);
     painter.setPen(Qt::white);
     painter.drawText(QRectF(batteryRect.left() - 8, rect.bottom() - 48,
                             batteryRect.width() + 16, 28),
-                     Qt::AlignCenter, QString("%1 \u00b0C").arg(temperature_));
+                     Qt::AlignCenter, QString("%1 \u00b0C").arg(m_temperature));
 }
 
 void Canvas::drawCommunication(QPainter &painter, const QRectF &rect) const
 {
     const QColor statusColor(255, 38, 38);
-    const QString statusIcon{QChar(ErrorIcon)};
+    const QString statusIcon{QChar(m_ErrorIcon)};
 
-    QFont iconFont(iconFontFamily_);
+    QFont iconFont(m_iconFontFamily);
     iconFont.setPointSize(28);
     painter.setFont(iconFont);
     painter.setPen(statusColor);

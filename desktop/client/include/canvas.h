@@ -13,17 +13,20 @@ public:
     explicit Canvas(QWidget *parent = nullptr);
     ~Canvas() override;
 
+    // * === Methods === *
+    // Setter methods
     void setSpeed(int speed);
+    void setBlinkVisible(bool visible);
     void setTemperature(int temperature);
     void setBatteryLevel(int batteryLevel);
-    void setLightSignals(bool leftLight, bool rightLight, bool warningLight);
     void setCommunicationStatus(bool connected, const QString &message);
-    void setBlinkVisible(bool visible);
+    void setLightSignals(bool leftLight, bool rightLight, bool warningLight);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
 
 private:
+    // * === Types === *
     enum class SignalSound
     {
         None,
@@ -32,36 +35,62 @@ private:
         Warning
     };
 
-    QColor temperatureColor() const;
-    QColor batteryColor() const;
-    bool hasActiveLightSignal() const;
-    SignalSound selectedSignalSound() const;
-    QString soundPathFor(SignalSound sound) const;
+    // * === Variables === *
+    // Misc
+    bool m_connected{true};
+    bool m_blinkVisible{true};
+
+    // Fonts
+    QString m_iconFontFamily{"Material Icons"};
+
+    // Messages
+    QString m_communicationMessage{"Connected"};
+
+    // Signals
+    int m_speed{110};
+    int m_temperature{15};
+    int m_batteryLevel{55};
+    bool m_leftLight{false};
+    bool m_rightLight{false};
+    bool m_warningLight{false};
+
+    // Sounds
+    QString m_signalSoundCommand;
+    QProcess m_signalSoundProcess;
+    QString m_leftSignalSoundPath;
+    QString m_rightSignalSoundPath;
+    QString m_warningSignalSoundPath;
+    bool m_stoppingSignalSound{false};
+    SignalSound m_activeSignalSound{SignalSound::None};
+
+    // Icons
+    const ushort m_ErrorIcon = 0xe628;
+    const ushort m_SpeedIcon = 0xe9e4;
+    const ushort m_BatteryIcon = 0xebdc;
+    const ushort m_LeftArrowIcon = 0xe5c4;
+    const ushort m_RightArrowIcon = 0xe5c8;
+    const ushort m_TemperatureIcon = 0xe1ff;
+
+    // * === Methods === *
+    // Sound methods
     void stopSignalSound();
     void startSignalSound();
-    QPointF pointOnGauge(const QPointF &center, qreal radius, int speed) const;
-    void drawGauge(QPainter &painter, const QRectF &rect) const;
-    void drawNeedle(QPainter &painter, const QPointF &center, qreal radius) const;
-    void drawSideIndicators(QPainter &painter, const QRectF &rect) const;
-    void drawCommunication(QPainter &painter, const QRectF &rect) const;
+    SignalSound selectedSignalSound() const;
 
-    QString iconFontFamily_{"Material Icons"};
-    int speed_{110};
-    int temperature_{15};
-    int batteryLevel_{55};
-    bool leftLight_{false};
-    bool rightLight_{false};
-    bool warningLight_{false};
-    bool connected_{true};
-    bool blinkVisible_{true};
-    QString communicationMessage_{"Connected"};
-    QString leftSignalSoundPath_;
-    QString rightSignalSoundPath_;
-    QString warningSignalSoundPath_;
-    QString signalSoundCommand_;
-    QProcess signalSoundProcess_;
-    SignalSound activeSignalSound_{SignalSound::None};
-    bool stoppingSignalSound_{false};
+    // Color methods
+    QColor batteryColor() const;
+    QColor temperatureColor() const;
+
+    // Draw methods
+    void drawGauge(QPainter &painter, const QRectF &rect) const;
+    void drawCommunication(QPainter &painter, const QRectF &rect) const;
+    void drawSideIndicators(QPainter &painter, const QRectF &rect) const;
+    QPointF pointOnGauge(const QPointF &center, qreal radius, int speed) const;
+    void drawNeedle(QPainter &painter, const QPointF &center, qreal radius) const;
+
+    // Misc methods
+    bool hasActiveLightSignal() const;
+    QString soundPathFor(SignalSound sound) const;
 };
 
 #endif
