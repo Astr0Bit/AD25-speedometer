@@ -16,8 +16,5 @@ int main(int argc, char **argv)
     Window window(tcp_service);
     window.show();
 
-    // Start the TCP/IP service
-    tcp_service.run();
-
     return app.exec();
 }

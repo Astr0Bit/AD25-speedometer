@@ -15,6 +15,9 @@ protected:
     mutable std::mutex m_mtx;
     std::atomic_bool m_status{false};
 
+    // * Send buffer
+    virtual void run(void) = 0;
+
 private:
     void insert_helper(int val, const char *sig_str);
 
@@ -62,9 +65,6 @@ public:
     {
         return m_status;
     };
-
-    // * Send buffer
-    virtual void run(void) = 0;
 };
 
 #endif

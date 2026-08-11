@@ -39,13 +39,17 @@ void TCPService::serverWorker(int sockfd)
 
                     ssize_t bytes_sent = 0;
 
+                    // Temporary buffer
+                    uint8_t temp_buf[SBUFLEN]{0};
+
                     // Scope to lock the mutex, which is automatically released when it goes out of scope
                     {
                         std::lock_guard<std::mutex> lock(m_mtx);
-
-                        // Send the buffer
-                        bytes_sent = send(connfd, m_buf, SBUFLEN, MSG_NOSIGNAL);
+                        memcpy(temp_buf, m_buf, sizeof(uint8_t) * SBUFLEN);
                     }
+
+                    // Send the buffer
+                    bytes_sent = send(connfd, temp_buf, SBUFLEN, MSG_NOSIGNAL);
 
                     // In case the connection silently drops
                     if (bytes_sent <= 0)
@@ -62,6 +66,11 @@ void TCPService::serverWorker(int sockfd)
             }
             else
             {
+                if (!m_is_running)
+                {
+                    break;
+                }
+
                 std::cout << "Failed to accept the connection...\n";
             }
         }
@@ -70,13 +79,9 @@ void TCPService::serverWorker(int sockfd)
     {
         std::cout << "Failed to listen to the port...\n";
     }
-
-    // Close the socket
-    shutdown(sockfd, SHUT_RDWR);
-    close(sockfd);
 }
 
-// Public
+// Protected
 void TCPService::run(void)
 {
     // Attempt to create the TCP / IP socket
@@ -102,9 +107,11 @@ void TCPService::run(void)
     // Bind the socket address to the socket
     if (0 == bind(sockfd, (sockaddr *)&servaddr, sizeof(servaddr)))
     {
-        // Spawn a detached thread for the TCP/IP communication
         std::cout << "Spawned TCP/IP server worker thread\n";
-        std::thread(&TCPService::serverWorker, this, sockfd).detach();
+
+        // Spawn and hand the sockfd and thread to the TCPService object
+        m_sockfd = sockfd;
+        m_workerThread = std::thread(&TCPService::serverWorker, this, sockfd);
     }
     else
     {
