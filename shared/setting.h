@@ -71,6 +71,8 @@ namespace Setting {
     }
 #else
     namespace TCP {
+        constexpr const char* IP = "127.0.0.1";
+        constexpr uint16_t PORT = 12345;
     }
 #endif
 }  // namespace Setting
