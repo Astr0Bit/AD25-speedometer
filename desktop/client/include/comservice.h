@@ -15,16 +15,15 @@ protected:
 
     COMService() = default;
     virtual ~COMService() = default;
+    virtual void run() = 0;
     inline void setStatus(bool status) noexcept { m_status.store(status, std::memory_order_relaxed); }
-public:
 
+public:
     void getSpeed(uint8_t& out);
     void getTemp(int8_t& out);
     void getBattery(uint8_t& out);
     void getLightSignals(bool& outl, bool& outr);
     inline bool getStatus() const noexcept { return m_status.load(std::memory_order_relaxed); }
-
-    virtual void run() = 0;
 
 private:
     uint64_t extract64(size_t byte_off);
