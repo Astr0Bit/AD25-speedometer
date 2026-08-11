@@ -11,7 +11,7 @@
 // Private
 void TCPService::serverWorker(int sockfd)
 {
-    if (0 == listen(sockfd, N_CONNS))
+    if (0 == listen(sockfd, Setting::TCP::N_CONNS))
     {
         std::cout << "Listening for incoming connections...\n";
 
@@ -35,7 +35,7 @@ void TCPService::serverWorker(int sockfd)
                     // * Periodically send the COMService buffer
 
                     // Wait x milliseconds before sending the packet
-                    std::this_thread::sleep_for(std::chrono::milliseconds(SEND_INTERVAL_MS));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(Setting::TCP::RW_INTERVAL_MS));
 
                     ssize_t bytes_sent = 0;
 
@@ -96,7 +96,7 @@ void TCPService::run(void)
 
     // Assign IP and PORT
     servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(PORT);
+    servaddr.sin_port = htons(Setting::TCP::PORT);
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     // Bind the socket address to the socket

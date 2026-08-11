@@ -21,9 +21,12 @@
 #include <cstdint>
 #include <cassert>
 
-namespace Setting {
-    class Signal {
-        struct Info {
+namespace Setting
+{
+    class Signal
+    {
+        struct Info
+        {
             uint32_t length;
             uint32_t start;
             int32_t min;
@@ -44,7 +47,7 @@ namespace Setting {
             for (size_t i = 0; i < sizeof(signals_tuple) / sizeof(signals_tuple[0]); ++i)
             {
                 std::string_view key = std::get<std::string_view>(signals_tuple[i]);
-                const Info& val = std::get<Info>(signals_tuple[i]);
+                const Info &val = std::get<Info>(signals_tuple[i]);
                 assert(SBUFLEN >= (((val.start + val.length + 7) & ~7) >> 3));
                 map[key] = val;
             }
@@ -52,13 +55,13 @@ namespace Setting {
         }
 
     public:
-        static const Signal& handle()
+        static const Signal &handle()
         {
             static Signal instance;
             return instance;
         }
 
-        const Info& operator[](std::string_view key) const
+        const Info &operator[](std::string_view key) const
         {
             return m_signal_map.at(key);
         }
@@ -67,13 +70,20 @@ namespace Setting {
     constexpr int INTERVAL{40};
 
 #ifdef UARTCOM
-    namespace UART {
+    namespace UART
+    {
     }
 #else
-    namespace TCP {
+    namespace TCP
+    {
+        // Constants
+        constexpr const int N_CONNS{1};
+        constexpr const int RW_INTERVAL_MS{20};
+        constexpr const char *IP{"127.0.0.1"};
+        constexpr const int PORT{1337};
     }
 #endif
-}  // namespace Setting
+} // namespace Setting
 #endif
 
-#endif  // SETTING_H
+#endif // SETTING_H
