@@ -3,7 +3,6 @@
 
 #include <thread>
 #include <unistd.h>
-#include <string_view>
 #include "comservice.h"
 #include <sys/socket.h>
 
