@@ -14,7 +14,7 @@ Window::Window(QWidget *parent)
     canvas_.setTemperature(30);
     canvas_.setBatteryLevel(100);
     canvas_.setLightSignals(false, false, false);
-    canvas_.setCommunicationStatus(true, "Connected");
+    canvas_.setCommunicationStatus(true, "Connection Error");
 
     layout_.setContentsMargins(0, 0, 0, 0);
     layout_.addWidget(&canvas_, 0, 0);
