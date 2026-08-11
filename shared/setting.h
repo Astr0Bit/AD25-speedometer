@@ -78,7 +78,6 @@ namespace Setting
     {
         // Constants
         constexpr const int N_CONNS{1};
-        constexpr const int RW_INTERVAL_MS{20};
         constexpr const char *IP{"127.0.0.1"};
         constexpr const int PORT{1337};
     }

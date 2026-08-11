@@ -35,7 +35,7 @@ void TCPService::serverWorker(int sockfd)
                     // * Periodically send the COMService buffer
 
                     // Wait x milliseconds before sending the packet
-                    std::this_thread::sleep_for(std::chrono::milliseconds(Setting::TCP::RW_INTERVAL_MS));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(Setting::INTERVAL));
 
                     ssize_t bytes_sent = 0;
 
