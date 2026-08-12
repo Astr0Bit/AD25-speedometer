@@ -107,7 +107,7 @@ Window::Window(COMService &com_service) : m_com_service(com_service)
     auto updateLights = [this]()
     {
         bool is_left_active = box_left.isChecked() || box_warning.isChecked();
-        bool is_right_active = box_left.isChecked() || box_warning.isChecked();
+        bool is_right_active = box_right.isChecked() || box_warning.isChecked();
 
         // Push values to buffer
         m_com_service.setLightSignals(is_left_active, is_right_active);
