@@ -71,6 +71,9 @@ namespace Setting {
     }
 #else
     namespace TCP {
+        constexpr const char* SERVER_IP = "127.0.0.1";
+        constexpr uint16_t SERVER_PORT = 1337;
+        constexpr int CLIENT_RETRY_CONNECT_INTERVAL{1000};
     }
 #endif
 }  // namespace Setting
