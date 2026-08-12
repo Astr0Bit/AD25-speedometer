@@ -8,6 +8,14 @@
 
 class TCPService : public COMService
 {
+    std::atomic_int m_sockfd{-1};
+    std::atomic_bool m_stop{false};
+    std::thread m_worker;
+
+    void run() override;
+public:
+    TCPService();
+    ~TCPService();
 };
 
 #endif
