@@ -101,7 +101,7 @@ void TCPService::run(void)
 
     // Assign IP and PORT
     servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(Setting::TCP::PORT);
+    servaddr.sin_port = htons(Setting::TCP::SERVER_PORT);
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     // Bind the socket address to the socket
