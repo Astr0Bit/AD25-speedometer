@@ -6,6 +6,7 @@
 
 class UARTService : public COMService, public QThread
 {
+    void run() override {}; // won't compile otherwise
 };
 
 #endif
