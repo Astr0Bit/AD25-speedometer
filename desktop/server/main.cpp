@@ -1,5 +1,11 @@
 #include "window.h"
+
+#ifdef UARTCOM
+#include "uartservice.h"
+#else
 #include "tcpservice.h"
+#endif
+
 #include <QApplication>
 
 int main(int argc, char **argv)
@@ -10,10 +16,13 @@ int main(int argc, char **argv)
     QFont defaultFont("Arial", 10, QFont::Normal);
     app.setFont(defaultFont);
 
-    // * NOTE -> This should be self-determined
-    TCPService tcp_service;
+    #ifdef UARTCOM
+    UARTService service;
+    #else
+    TCPService service;
+    #endif
 
-    Window window(tcp_service);
+    Window window(service);
     window.show();
 
     return app.exec();
