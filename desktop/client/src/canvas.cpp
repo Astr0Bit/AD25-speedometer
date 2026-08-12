@@ -1,13 +1,14 @@
+#include <QPen>
+#include <QDir>
+#include <QFont>
 #include <QtMath>
 #include "canvas.h"
 #include "setting.h"
 #include <QFileInfo>
-#include <QFont>
 #include <QFontDatabase>
-#include <QPen>
-#include <QCoreApplication>
-#include <QDir>
 #include <QStandardPaths>
+#include <QCoreApplication>
+#include <iostream>
 
 // Helper functions for getting Info structs for the required signals
 const auto &speedInfo()
@@ -25,35 +26,33 @@ const auto &batteryInfo()
     return Setting::Signal::handle()["battery_level"];
 }
 
+// * === Canvas class === *
+// Constructor
 Canvas::Canvas(QWidget *parent)
     : QWidget(parent)
 {
-    const int fontId = QFontDatabase::addApplicationFont("desktop/client/res/MaterialIcons.ttf");
+    // Construct relative paths to find the audio files and fonts
+    const QString appDir = QCoreApplication::applicationDirPath() + "/";
+    const QString resDir = QDir::cleanPath(appDir + "../desktop/client/res") + "/";
+
+    // Find the icon font
+    const int fontId = QFontDatabase::addApplicationFont(resDir + m_iconFontFamilyFileName);
     if (fontId != -1)
     {
         m_iconFontFamily = QFontDatabase::applicationFontFamilies(fontId).value(0, m_iconFontFamily);
     }
 
-    const QString appDir = QCoreApplication::applicationDirPath();
-    const QString resDir = QDir::cleanPath(appDir + "/../desktop/client/res");
-    m_leftSignalSoundPath = QDir::cleanPath(appDir + "/sound_left.wav");
-    m_rightSignalSoundPath = QDir::cleanPath(appDir + "/sound_right.wav");
-    m_warningSignalSoundPath = QDir::cleanPath(appDir + "/sound_warning.wav");
-    if (!QFileInfo::exists(m_leftSignalSoundPath))
-    {
-        m_leftSignalSoundPath = QDir::cleanPath(resDir + "/sound_left.wav");
-    }
-    if (!QFileInfo::exists(m_rightSignalSoundPath))
-    {
-        m_rightSignalSoundPath = QDir::cleanPath(resDir + "/sound_right.wav");
-    }
-    if (!QFileInfo::exists(m_warningSignalSoundPath))
-    {
-        m_warningSignalSoundPath = QDir::cleanPath(resDir + "/sound_warning.wav");
-    }
+    // Get relative paths for the respective audio files
+    m_leftSignalSoundPath = QDir::cleanPath(resDir + m_leftSignalSoundFileName);
+    m_rightSignalSoundPath = QDir::cleanPath(resDir + m_rightSignalSoundFileName);
+    m_warningSignalSoundPath = QDir::cleanPath(resDir + m_warningSignalSoundFileName);
+
+    // Get absolute paths for the respective audio files
     m_leftSignalSoundPath = QFileInfo(m_leftSignalSoundPath).absoluteFilePath();
     m_rightSignalSoundPath = QFileInfo(m_rightSignalSoundPath).absoluteFilePath();
     m_warningSignalSoundPath = QFileInfo(m_warningSignalSoundPath).absoluteFilePath();
+
+    // Attach a lambda method to the audio command
     m_signalSoundCommand = QStandardPaths::findExecutable("pw-play");
     if (m_signalSoundCommand.isEmpty())
     {
@@ -67,15 +66,54 @@ Canvas::Canvas(QWidget *parent)
                     startSignalSound();
                 }
             });
-    setMinimumSize(472, 334);
+
+    // Set minimum window size
+    setMinimumSize(m_minWindowWidth, m_minWindowHeight);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 }
 
+// Destructor
 Canvas::~Canvas()
 {
     stopSignalSound();
 }
 
+// Events
+// Paints the canvas on an update() event
+void Canvas::paintEvent(QPaintEvent *event)
+{
+    Q_UNUSED(event);
+
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    // Fill the GUI background
+    painter.fillRect(rect(), m_rectColor);
+
+    // Set the GUI size
+    const QSizeF designSize(m_windowWidth, m_windowHeight);
+
+    // Scale if resized
+    const qreal scale = qMin(width() / designSize.width(), height() / designSize.height());
+    const QPointF offset((width() - designSize.width() * scale) / 2.0,
+                         (height() - designSize.height() * scale) / 2.0);
+    painter.translate(offset);
+    painter.scale(scale, scale);
+    painter.fillRect(QRectF(QPointF(0, 0), designSize), m_rectColor);
+    const QRectF panel(QPointF(0, 0), designSize);
+
+    // Draw gauge and indicators
+    drawGauge(painter, QRectF(0, 0, m_windowWidth, m_windowHeight));
+    drawSideIndicators(painter, panel);
+}
+
+// To set the default window size
+QSize Canvas::sizeHint() const
+{
+    return QSize(m_defaultWindowWidth, m_defaultWindowHeight);
+}
+
+// Setter methods
 void Canvas::setSpeed(int speed)
 {
     const auto &info = speedInfo();
@@ -124,10 +162,9 @@ void Canvas::setLightSignals(bool leftLight, bool rightLight, bool warningLight)
     update();
 }
 
-void Canvas::setCommunicationStatus(bool connected, const QString &message)
+void Canvas::setCommunicationStatus(bool connected)
 {
     m_connected = connected;
-    m_communicationMessage = message;
 
     if (!m_connected)
     {
@@ -150,58 +187,38 @@ void Canvas::setBlinkVisible(bool visible)
     update();
 }
 
-void Canvas::paintEvent(QPaintEvent *event)
+// Sound methods
+void Canvas::stopSignalSound()
 {
-    Q_UNUSED(event);
+    // Stop the sound
+    m_stoppingSignalSound = true;
 
-    QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing);
+    // Stop the audio process if it's running
+    if (m_signalSoundProcess.state() != QProcess::NotRunning)
+    {
+        m_signalSoundProcess.kill();
+        m_signalSoundProcess.waitForFinished(m_waitTime_ms);
+    }
 
-    painter.fillRect(rect(), QColor(72, 31, 74));
-
-    const QSizeF designSize(600, 420);
-    const qreal scale = qMin(width() / designSize.width(), height() / designSize.height());
-    const QPointF offset((width() - designSize.width() * scale) / 2.0,
-                         (height() - designSize.height() * scale) / 2.0);
-
-    painter.translate(offset);
-    painter.scale(scale, scale);
-    painter.fillRect(QRectF(QPointF(0, 0), designSize), QColor(72, 31, 74));
-
-    const QRectF panel(QPointF(0, 0), designSize);
-    drawGauge(painter, QRectF(0, 0, 600, 420));
-    drawSideIndicators(painter, panel);
+    // Reset so other sounds can be played
+    m_stoppingSignalSound = false;
 }
 
-QColor Canvas::temperatureColor() const
+// TODO -> Add comments
+void Canvas::startSignalSound()
 {
-    if (m_temperature < 5)
+    if (m_signalSoundCommand.isEmpty())
     {
-        return QColor(245, 247, 250);
+        return;
     }
-    if (m_temperature <= 39)
+    if (m_signalSoundProcess.state() == QProcess::NotRunning)
     {
-        return QColor(48, 150, 255);
+        const QString soundPath = soundPathFor(m_activeSignalSound);
+        if (!soundPath.isEmpty())
+        {
+            m_signalSoundProcess.start(m_signalSoundCommand, {soundPath});
+        }
     }
-    return QColor(235, 76, 92);
-}
-
-QColor Canvas::batteryColor() const
-{
-    if (m_batteryLevel < 25)
-    {
-        return QColor(235, 76, 92);
-    }
-    if (m_batteryLevel <= 49)
-    {
-        return QColor(240, 196, 65);
-    }
-    return QColor(81, 196, 120);
-}
-
-bool Canvas::hasActiveLightSignal() const
-{
-    return m_leftLight || m_rightLight || m_warningLight;
 }
 
 Canvas::SignalSound Canvas::selectedSignalSound() const
@@ -224,99 +241,87 @@ Canvas::SignalSound Canvas::selectedSignalSound() const
     return SignalSound::None;
 }
 
-QString Canvas::soundPathFor(SignalSound sound) const
+// Color methods
+QColor Canvas::temperatureColor() const
 {
-    // Return the file path for the sound we want to play.
-    // This keeps the sound choice in one place.
-    switch (sound)
+    if (m_temperature < m_tempLowThresh)
     {
-    case SignalSound::Left:
-        return m_leftSignalSoundPath;
-    case SignalSound::Right:
-        return m_rightSignalSoundPath;
-    case SignalSound::Warning:
-        return m_warningSignalSoundPath;
-    case SignalSound::None:
-        return {};
+        return m_tempWhite;
     }
-
-    return {};
+    if (m_temperature < m_tempMidThresh)
+    {
+        return m_tempBlue;
+    }
+    return m_tempRed;
 }
 
-void Canvas::stopSignalSound()
+QColor Canvas::batteryColor() const
 {
-    m_stoppingSignalSound = true;
-    if (m_signalSoundProcess.state() != QProcess::NotRunning)
+    if (m_batteryLevel < m_batteryCriticalThresh)
     {
-        m_signalSoundProcess.kill();
-        m_signalSoundProcess.waitForFinished(100);
+        return m_batteryRed;
     }
-    m_stoppingSignalSound = false;
+    if (m_batteryLevel < m_batteryWarningThresh)
+    {
+        return m_batteryYellow;
+    }
+    return m_batteryGreen;
 }
 
-void Canvas::startSignalSound()
-{
-    if (m_signalSoundCommand.isEmpty())
-    {
-        return;
-    }
-    if (m_signalSoundProcess.state() == QProcess::NotRunning)
-    {
-        const QString soundPath = soundPathFor(m_activeSignalSound);
-        if (!soundPath.isEmpty())
-        {
-            m_signalSoundProcess.start(m_signalSoundCommand, {soundPath});
-        }
-    }
-}
-
+// Draw methods
 QPointF Canvas::pointOnGauge(const QPointF &center, qreal radius, int speed) const
 {
     // Convert the speed value to a position on the round speedometer.
     // First we convert speed to an angle, then we use sin/cos to get x and y.
-    const qreal startAngle = 225.0;
-    const qreal sweepAngle = 270.0;
     const auto &info = speedInfo();
     const qreal speedRange = info.max - info.min;
     const qreal speedRatio = speedRange == 0 ? 0.0 : (speed - info.min) / speedRange;
-    const qreal angle = qDegreesToRadians(startAngle - (sweepAngle * speedRatio));
+    const qreal angle = qDegreesToRadians(m_gaugeStartAngle - (m_gaugeSweepAngle * speedRatio));
     return QPointF(center.x() + qCos(angle) * radius,
                    center.y() - qSin(angle) * radius);
 }
 
+// TODO -> Add comments
 void Canvas::drawGauge(QPainter &painter, const QRectF &rect) const
 {
-    const qreal radius = 225;
-    const QPointF center(rect.left() + 255, rect.top() + 260);
+    const qreal radius = m_gaugeStartAngle;
+    const QPointF center(
+        rect.left() + m_gaugeCenterXOffset,
+        rect.top() + m_gaugeCenterYOffset);
 
     // Draw the big white arc around the speedometer.
     // The numbers and ticks will be placed around this arc.
-    painter.setPen(QPen(Qt::white, 6));
+    painter.setPen(QPen(Qt::white, m_gaugeArcPenWidth));
     painter.setBrush(Qt::NoBrush);
-    painter.drawArc(QRectF(center.x() - radius, center.y() - radius,
-                           radius * 2, radius * 2),
-                    225 * 16, -270 * 16);
+    painter.drawArc(
+        QRectF(center.x() - radius,
+               center.y() - radius,
+               radius * 2, radius * 2),
+        m_gaugeStartAngle * m_qtAngleMultiplier,
+        -m_gaugeSweepAngle * m_qtAngleMultiplier);
 
     const auto &speedLimit = speedInfo();
-    for (int value = speedLimit.min; value <= speedLimit.max; value += 5)
+    for (int value = speedLimit.min; value <= speedLimit.max; value += m_minorTickInterval)
     {
         // Draw the small and big tick marks.
-        // Small ticks are every 5 km/h. Big ticks and numbers are every 20 km/h.
-        const bool majorTick = value % 20 == 0;
-        const qreal outerRadius = radius - 7;
-        const qreal innerRadius = outerRadius - (majorTick ? 22 : 10);
+        const bool majorTick = value % m_majorTickInterval == 0;
+        const qreal outerRadius = radius - m_tickOuterRadiusOffset;
+        const qreal innerRadius = outerRadius - (majorTick ? m_tickMajorLength : m_tickMinorLength);
         const QPointF outer = pointOnGauge(center, outerRadius, value);
         const QPointF inner = pointOnGauge(center, innerRadius, value);
 
-        painter.setPen(QPen(Qt::white, majorTick ? 5 : 3));
+        painter.setPen(QPen(Qt::white, majorTick ? m_tickMajorWidth : m_tickMinorWidth));
         painter.drawLine(inner, outer);
 
         if (majorTick)
         {
-            const QPointF labelPoint = pointOnGauge(center, radius - 58, value);
-            QRectF labelRect(labelPoint.x() - 26, labelPoint.y() - 14, 52, 28);
+            const QPointF labelPoint = pointOnGauge(center, radius - m_labelRadiusOffset, value);
+            QRectF labelRect(
+                labelPoint.x() - m_labelRectXOffset,
+                labelPoint.y() - m_labelRectYOffset,
+                m_labelRectWidth, m_labelRectHeight);
             QFont labelFont = painter.font();
-            labelFont.setPointSize(17);
+            labelFont.setPointSize(m_speedLabelFontSize);
             labelFont.setBold(false);
             painter.setFont(labelFont);
             painter.setPen(Qt::white);
@@ -330,67 +335,86 @@ void Canvas::drawGauge(QPainter &painter, const QRectF &rect) const
     {
         painter.setPen(Qt::white);
         QFont iconFont(m_iconFontFamily);
-        iconFont.setPointSize(32);
+        iconFont.setPointSize(m_speedIconFontSize);
         painter.setFont(iconFont);
-        painter.drawText(QRectF(center.x() - 28, center.y() + 45, 56, 44),
-                         Qt::AlignCenter, QString(QChar(m_SpeedIcon)));
+        painter.drawText(
+            QRectF(center.x() - m_speedIconXOffset,
+                   center.y() + m_speedIconYOffset,
+                   m_speedIconRectWidth, m_speedIconRectHeight),
+            Qt::AlignCenter, QString(QChar(m_SpeedIcon)));
 
         QFont unitFont = painter.font();
-        unitFont.setFamily("Sans Serif");
+        unitFont.setFamily(m_defaultFontFamily);
         unitFont.setPointSize(22);
         unitFont.setBold(true);
         painter.setFont(unitFont);
-        painter.drawText(QRectF(center.x() - 82, center.y() + 88, 164, 34),
-                         Qt::AlignCenter, QString("%1 km/h").arg(m_speed));
+        painter.drawText(
+            QRectF(center.x() - m_unitXOffset,
+                   center.y() + m_unitYOffset,
+                   m_unitRectWidth, m_unitRectHeight),
+            Qt::AlignCenter, QString("%1 km/h").arg(m_speed));
     }
     else
     {
-        drawCommunication(painter, QRectF(center.x() - 100, center.y() + 58, 200, 70));
+        drawCommunication(
+            painter,
+            QRectF(center.x() - m_commXOffset,
+                   center.y() + m_commYOffset,
+                   m_commRectWidth, m_commRectHeight));
     }
 }
 
 void Canvas::drawNeedle(QPainter &painter, const QPointF &center, qreal radius) const
 {
-    // Draw the red needle.
-    // The needle tip is placed on the gauge using the current speed value.
-    const QPointF tip = pointOnGauge(center, radius - 36, m_speed);
+    // Calculate the tip position
+    const QPointF tip = pointOnGauge(center, radius - m_needleLengthOffset, m_speed);
+
+    // Calculate needle angle
     const qreal angle = qAtan2(center.y() - tip.y(), tip.x() - center.x());
     const QPointF normal(-qSin(angle), -qCos(angle));
-    const QPointF base(center.x() - qCos(angle) * 4, center.y() + qSin(angle) * 4);
+    const QPointF base(
+        center.x() - qCos(angle) * m_needleTailOffset,
+        center.y() + qSin(angle) * m_needleTailOffset);
 
+    // Create the needle as a polygon
     QPolygonF needle;
     needle << tip
-           << QPointF(base.x() + normal.x() * 5, base.y() + normal.y() * 5)
-           << QPointF(base.x() - normal.x() * 5, base.y() - normal.y() * 5);
+           << QPointF(base.x() + normal.x() * m_needleBaseHalfWidth,
+                      base.y() + normal.y() * m_needleBaseHalfWidth)
+           << QPointF(base.x() - normal.x() * m_needleBaseHalfWidth,
+                      base.y() - normal.y() * m_needleBaseHalfWidth);
 
+    // Draw the needle
     painter.setPen(Qt::NoPen);
-    painter.setBrush(QColor(192, 58, 75));
+    painter.setBrush(m_needleColor);
     painter.drawPolygon(needle);
 
-    painter.setBrush(Qt::white);
-    painter.drawEllipse(center, 17, 17);
-    painter.setBrush(QColor(192, 58, 75));
-    painter.drawEllipse(center, 10, 10);
+    // Draw the outer center circle
+    painter.setBrush(m_needleOuterColor);
+    painter.drawEllipse(center, m_needleOuterRadius, m_needleOuterRadius);
+
+    // Draw the inner center circle
+    painter.setBrush(m_needleColor);
+    painter.drawEllipse(center, m_needleInnerRadius, m_needleInnerRadius);
 }
 
+// TODO -> Add variables instead of magic numbers
 void Canvas::drawSideIndicators(QPainter &painter, const QRectF &rect) const
 {
     // Draw left and right arrows.
     // They are weak green when inactive and bright green when they blink.
     const bool showLeft = m_blinkVisible && (m_leftLight || m_warningLight);
     const bool showRight = m_blinkVisible && (m_rightLight || m_warningLight);
-    const QColor activeGreen(0, 240, 20);
-    const QColor inactiveGreen(0, 240, 20, 55);
 
     QFont iconFont(m_iconFontFamily);
-    iconFont.setPointSize(34);
+    iconFont.setPointSize(m_arrowIconSize);
     painter.setFont(iconFont);
 
-    painter.setPen(showRight ? activeGreen : inactiveGreen);
+    painter.setPen(showRight ? m_signalActiveGreen : m_signalInactiveGreen);
     painter.drawText(QRectF(rect.right() - 76, rect.top() + 28, 58, 52),
                      Qt::AlignCenter, QString(QChar(m_RightArrowIcon)));
 
-    painter.setPen(showLeft ? activeGreen : inactiveGreen);
+    painter.setPen(showLeft ? m_signalActiveGreen : m_signalInactiveGreen);
     painter.drawText(QRectF(rect.left() + 18, rect.top() + 28, 58, 52),
                      Qt::AlignCenter, QString(QChar(m_LeftArrowIcon)));
 
@@ -450,22 +474,53 @@ void Canvas::drawSideIndicators(QPainter &painter, const QRectF &rect) const
 
 void Canvas::drawCommunication(QPainter &painter, const QRectF &rect) const
 {
-    const QColor statusColor(255, 38, 38);
     const QString statusIcon{QChar(m_ErrorIcon)};
 
     QFont iconFont(m_iconFontFamily);
-    iconFont.setPointSize(28);
+    iconFont.setPointSize(m_commIconSize);
     painter.setFont(iconFont);
-    painter.setPen(statusColor);
-    painter.drawText(QRectF(rect.left(), rect.top(), rect.width(), 34),
-                     Qt::AlignCenter, statusIcon);
+    painter.setPen(m_commStatusColor);
+    painter.drawText(
+        QRectF(rect.left(),
+               rect.top(),
+               rect.width(),
+               m_commIconHeight),
+        Qt::AlignCenter, statusIcon);
 
-    painter.setPen(statusColor);
+    painter.setPen(m_commStatusColor);
     QFont statusFont = painter.font();
-    statusFont.setFamily("Sans Serif");
-    statusFont.setPointSize(13);
+    statusFont.setFamily(m_defaultFontFamily);
+    statusFont.setPointSize(m_statusFontSize);
     statusFont.setBold(true);
     painter.setFont(statusFont);
-    painter.drawText(QRectF(rect.left(), rect.top() + 34, rect.width(), 22),
-                     Qt::AlignCenter, "Connection Error");
+    painter.drawText(
+        QRectF(rect.left(),
+               rect.top() + m_commIconHeight,
+               rect.width(), m_messageBoxHeight),
+        Qt::AlignCenter, m_commErrorMsg);
+}
+
+// Misc methods
+bool Canvas::hasActiveLightSignal() const
+{
+    return m_leftLight || m_rightLight || m_warningLight;
+}
+
+QString Canvas::soundPathFor(SignalSound sound) const
+{
+    // Return the file path for the sound we want to play.
+    // This keeps the sound choice in one place.
+    switch (sound)
+    {
+    case SignalSound::Left:
+        return m_leftSignalSoundPath;
+    case SignalSound::Right:
+        return m_rightSignalSoundPath;
+    case SignalSound::Warning:
+        return m_warningSignalSoundPath;
+    case SignalSound::None:
+        return {};
+    }
+
+    return {};
 }
