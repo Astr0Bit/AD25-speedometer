@@ -23,7 +23,7 @@ public:
     void setTemperature(int temperature);
     void setBatteryLevel(int batteryLevel);
     void setCommunicationStatus(bool connected);
-    void setLightSignals(bool leftLight, bool rightLight, bool warningLight);
+    void setLightSignals(bool leftLight, bool rightLight);
 
 protected:
     // Events
@@ -211,7 +211,6 @@ private:
     int m_batteryLevel{0};
     bool m_leftLight{false};
     bool m_rightLight{false};
-    bool m_warningLight{false};
 
     // Intervals
     const int m_minorTickInterval{5};

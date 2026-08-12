@@ -135,11 +135,10 @@ void Canvas::setBatteryLevel(int batteryLevel)
     update();
 }
 
-void Canvas::setLightSignals(bool leftLight, bool rightLight, bool warningLight)
+void Canvas::setLightSignals(bool leftLight, bool rightLight)
 {
     m_leftLight = leftLight;
     m_rightLight = rightLight;
-    m_warningLight = warningLight;
 
     // This checks which light signal is active now.
     // If it changed, we stop the old sound and start the correct new sound.
@@ -173,7 +172,6 @@ void Canvas::setCommunicationStatus(bool connected)
         m_batteryLevel = 0;
         m_leftLight = false;
         m_rightLight = false;
-        m_warningLight = false;
         m_activeSignalSound = SignalSound::None;
         stopSignalSound();
     }
@@ -228,7 +226,7 @@ Canvas::SignalSound Canvas::selectedSignalSound() const
     // Decide which sound should be used.
     // Warning means both arrows, so it uses the normal stereo sound.
     // Left and right use separate sound files.
-    if (m_warningLight || (m_leftLight && m_rightLight))
+    if (m_leftLight && m_rightLight)
     {
         return SignalSound::Warning;
     }
@@ -409,8 +407,8 @@ void Canvas::drawSideIndicators(QPainter &painter, const QRectF &rect) const
 {
     // Draw left and right arrows.
     // They are weak green when inactive and bright green when they blink.
-    const bool showLeft = m_blinkVisible && (m_leftLight || m_warningLight);
-    const bool showRight = m_blinkVisible && (m_rightLight || m_warningLight);
+    const bool showLeft = m_blinkVisible && m_leftLight;
+    const bool showRight = m_blinkVisible && m_rightLight;
 
     QFont iconFont(m_iconFontFamily);
     iconFont.setPointSize(m_arrowIconSize);
@@ -527,7 +525,7 @@ void Canvas::drawCommunication(QPainter &painter, const QRectF &rect) const
 // Misc methods
 bool Canvas::hasActiveLightSignal() const
 {
-    return m_leftLight || m_rightLight || m_warningLight;
+    return m_leftLight || m_rightLight;
 }
 
 QString Canvas::soundPathFor(SignalSound sound) const

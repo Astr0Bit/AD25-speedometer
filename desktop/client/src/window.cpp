@@ -14,7 +14,7 @@ Window::Window(COMService &com_service, QWidget *parent)
     m_canvas.setTemperature(0);
     m_canvas.setBatteryLevel(0);
     m_canvas.setCommunicationStatus(false);
-    m_canvas.setLightSignals(false, false, false);
+    m_canvas.setLightSignals(false, false);
 
     m_layout.setContentsMargins(0, 0, 0, 0);
     m_layout.addWidget(&m_canvas, 0, 0);
@@ -57,7 +57,7 @@ Window::Window(COMService &com_service, QWidget *parent)
 
             // Read and set light signals
             m_com_service.getLightSignals(left_light, right_light);
-            m_canvas.setLightSignals(left_light, right_light, false);
+            m_canvas.setLightSignals(left_light, right_light);
         }
         else {
             m_canvas.setCommunicationStatus(false);
