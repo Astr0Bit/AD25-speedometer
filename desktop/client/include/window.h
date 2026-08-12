@@ -13,9 +13,9 @@ public:
     explicit Window(QWidget *parent = nullptr);
 
 private:
-    Canvas canvas_;
-    QGridLayout layout_;
-    QTimer blinkTimer_;
+    Canvas m_canvas;
+    QGridLayout m_layout;
+    QTimer m_blinkTimer;
 };
 
 #endif
