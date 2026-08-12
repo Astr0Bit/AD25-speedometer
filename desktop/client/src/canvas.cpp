@@ -335,24 +335,26 @@ void Canvas::drawGauge(QPainter &painter, const QRectF &rect) const
 
     drawNeedle(painter, center, radius);
 
-    painter.setPen(Qt::white);
-    QFont iconFont(iconFontFamily_);
-    iconFont.setPointSize(32);
-    painter.setFont(iconFont);
-    painter.drawText(QRectF(center.x() - 28, center.y() + 45, 56, 44),
-                     Qt::AlignCenter, QString(QChar(SpeedIcon)));
-
-    QFont unitFont = painter.font();
-    unitFont.setFamily("Sans Serif");
-    unitFont.setPointSize(22);
-    unitFont.setBold(true);
-    painter.setFont(unitFont);
-    painter.drawText(QRectF(center.x() - 82, center.y() + 88, 164, 34),
-                     Qt::AlignCenter, QString("%1 km/h").arg(speed_));
-
-    if (!connected_)
+    if (connected_)
     {
-        drawCommunication(painter, QRectF(center.x() - 90, center.y() + 122, 180, 50));
+        painter.setPen(Qt::white);
+        QFont iconFont(iconFontFamily_);
+        iconFont.setPointSize(32);
+        painter.setFont(iconFont);
+        painter.drawText(QRectF(center.x() - 28, center.y() + 45, 56, 44),
+                         Qt::AlignCenter, QString(QChar(SpeedIcon)));
+
+        QFont unitFont = painter.font();
+        unitFont.setFamily("Sans Serif");
+        unitFont.setPointSize(22);
+        unitFont.setBold(true);
+        painter.setFont(unitFont);
+        painter.drawText(QRectF(center.x() - 82, center.y() + 88, 164, 34),
+                         Qt::AlignCenter, QString("%1 km/h").arg(speed_));
+    }
+    else
+    {
+        drawCommunication(painter, QRectF(center.x() - 100, center.y() + 58, 200, 70));
     }
 }
 
@@ -476,14 +478,4 @@ void Canvas::drawCommunication(QPainter &painter, const QRectF &rect) const
     painter.drawText(QRectF(rect.left(), rect.top() + 34, rect.width(), 22),
                      Qt::AlignCenter, "Connection Error");
 
-    if (!communicationMessage_.isEmpty())
-    {
-        painter.setPen(QColor(255, 170, 170));
-        QFont messageFont = painter.font();
-        messageFont.setPointSize(9);
-        messageFont.setBold(false);
-        painter.setFont(messageFont);
-        painter.drawText(QRectF(rect.left(), rect.top() + 56, rect.width(), 18),
-                         Qt::AlignCenter, communicationMessage_);
-    }
 }
