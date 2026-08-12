@@ -1,18 +1,19 @@
 #include "window.h"
 #include "setting.h"
 
-Window::Window(QWidget *parent)
+Window::Window(COMService &com_service, QWidget *parent)
     : QDialog(parent),
       m_canvas(this),
-      m_layout(this)
+      m_layout(this),
+      m_com_service(com_service)
 {
     setWindowTitle("Speedometer client");
 
-    // Test values until the GUI is connected to COMService.
-    m_canvas.setSpeed(110);
-    m_canvas.setTemperature(30);
-    m_canvas.setBatteryLevel(100);
-    m_canvas.setCommunicationStatus(true);
+    // Initial state
+    m_canvas.setSpeed(0);
+    m_canvas.setTemperature(0);
+    m_canvas.setBatteryLevel(0);
+    m_canvas.setCommunicationStatus(false);
     m_canvas.setLightSignals(false, false, false);
 
     m_layout.setContentsMargins(0, 0, 0, 0);
@@ -24,4 +25,43 @@ Window::Window(QWidget *parent)
         visible = !visible;
         m_canvas.setBlinkVisible(visible); });
     m_blinkTimer.start(m_canvas.m_blink_interval_ms);
+
+    // Timer which both:
+    // - checks connection (com_service.m_status)
+    // - periodically reads the buffer
+    connect(&m_connBufTimer, &QTimer::timeout, this, [this]()
+            {
+        // Check connection
+        if (m_com_service.getStatus()) {
+            // Set connection status
+            m_canvas.setCommunicationStatus(true);
+
+            // Read buffer
+            static int8_t temp{0};
+            static uint8_t speed{0};
+            static uint8_t battery{0};
+            static bool left_light{false};
+            static bool right_light{false};
+
+            // Read and set speed
+            m_com_service.getSpeed(speed);
+            m_canvas.setSpeed(speed);
+
+            // Read and set temp
+            m_com_service.getTemp(temp);
+            m_canvas.setTemperature(temp);
+
+            // Read and set battery
+            m_com_service.getBattery(battery);
+            m_canvas.setBatteryLevel(battery);
+
+            // Read and set light signals
+            m_com_service.getLightSignals(left_light, right_light);
+            m_canvas.setLightSignals(left_light, right_light, false);
+        }
+        else {
+            m_canvas.setCommunicationStatus(false);
+        } });
+
+    m_connBufTimer.start(Setting::INTERVAL);
 }
