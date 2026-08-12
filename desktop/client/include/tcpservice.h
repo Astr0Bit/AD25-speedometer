@@ -8,7 +8,7 @@
 
 class TCPService : public COMService
 {
-    int m_sockfd{-1};
+    std::atomic_int m_sockfd{-1};
     std::atomic_bool m_stop{false};
     std::thread m_worker;
 
