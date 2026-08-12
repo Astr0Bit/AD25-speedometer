@@ -204,13 +204,15 @@ void Canvas::stopSignalSound()
     m_stoppingSignalSound = false;
 }
 
-// TODO -> Add comments
 void Canvas::startSignalSound()
 {
+    // Don't do anything if no command
     if (m_signalSoundCommand.isEmpty())
     {
         return;
     }
+
+    // Start the audio
     if (m_signalSoundProcess.state() == QProcess::NotRunning)
     {
         const QString soundPath = soundPathFor(m_activeSignalSound);
@@ -281,9 +283,9 @@ QPointF Canvas::pointOnGauge(const QPointF &center, qreal radius, int speed) con
                    center.y() - qSin(angle) * radius);
 }
 
-// TODO -> Add comments
 void Canvas::drawGauge(QPainter &painter, const QRectF &rect) const
 {
+    // Determine radius and center for where to put the gauge
     const qreal radius = m_gaugeStartAngle;
     const QPointF center(
         rect.left() + m_gaugeCenterXOffset,
@@ -300,6 +302,7 @@ void Canvas::drawGauge(QPainter &painter, const QRectF &rect) const
         m_gaugeStartAngle * m_qtAngleMultiplier,
         -m_gaugeSweepAngle * m_qtAngleMultiplier);
 
+    // Get speed limit from Info struct
     const auto &speedLimit = speedInfo();
     for (int value = speedLimit.min; value <= speedLimit.max; value += m_minorTickInterval)
     {
@@ -313,6 +316,7 @@ void Canvas::drawGauge(QPainter &painter, const QRectF &rect) const
         painter.setPen(QPen(Qt::white, majorTick ? m_tickMajorWidth : m_tickMinorWidth));
         painter.drawLine(inner, outer);
 
+        // Put speed value on the bigger tick marks
         if (majorTick)
         {
             const QPointF labelPoint = pointOnGauge(center, radius - m_labelRadiusOffset, value);
@@ -331,6 +335,7 @@ void Canvas::drawGauge(QPainter &painter, const QRectF &rect) const
 
     drawNeedle(painter, center, radius);
 
+    // Put connected icon, and current speed on gauge
     if (m_connected)
     {
         painter.setPen(Qt::white);
@@ -345,7 +350,7 @@ void Canvas::drawGauge(QPainter &painter, const QRectF &rect) const
 
         QFont unitFont = painter.font();
         unitFont.setFamily(m_defaultFontFamily);
-        unitFont.setPointSize(22);
+        unitFont.setPointSize(m_unitFontSize);
         unitFont.setBold(true);
         painter.setFont(unitFont);
         painter.drawText(
@@ -354,6 +359,8 @@ void Canvas::drawGauge(QPainter &painter, const QRectF &rect) const
                    m_unitRectWidth, m_unitRectHeight),
             Qt::AlignCenter, QString("%1 km/h").arg(m_speed));
     }
+
+    // Put disconnected icon, and "Connection error" message on gauge
     else
     {
         drawCommunication(
@@ -398,7 +405,6 @@ void Canvas::drawNeedle(QPainter &painter, const QPointF &center, qreal radius) 
     painter.drawEllipse(center, m_needleInnerRadius, m_needleInnerRadius);
 }
 
-// TODO -> Add variables instead of magic numbers
 void Canvas::drawSideIndicators(QPainter &painter, const QRectF &rect) const
 {
     // Draw left and right arrows.
@@ -411,28 +417,41 @@ void Canvas::drawSideIndicators(QPainter &painter, const QRectF &rect) const
     painter.setFont(iconFont);
 
     painter.setPen(showRight ? m_signalActiveGreen : m_signalInactiveGreen);
-    painter.drawText(QRectF(rect.right() - 76, rect.top() + 28, 58, 52),
+    painter.drawText(QRectF(rect.right() - m_rightArrowXOffset,
+                            rect.top() + m_arrowYOffset,
+                            m_arrowRectWidth, m_arrowRectHeight),
                      Qt::AlignCenter, QString(QChar(m_RightArrowIcon)));
 
     painter.setPen(showLeft ? m_signalActiveGreen : m_signalInactiveGreen);
-    painter.drawText(QRectF(rect.left() + 18, rect.top() + 28, 58, 52),
+    painter.drawText(QRectF(rect.left() + m_leftArrowXOffset,
+                            rect.top() + m_arrowYOffset,
+                            m_arrowRectWidth, m_arrowRectHeight),
                      Qt::AlignCenter, QString(QChar(m_LeftArrowIcon)));
 
     const QColor battery = batteryColor();
-    const QRectF batteryRect(rect.right() - 92, rect.top() + 150, 46, 86);
+    const QRectF batteryRect(rect.right() - m_batteryRectXOffset,
+                             rect.top() + m_batteryRectYOffset,
+                             m_batteryRectWidth, m_batteryRectHeight);
+
     // Draw the battery cap and outer shape.
     // The color depends on the current battery level.
     painter.setPen(Qt::NoPen);
     painter.setBrush(battery);
-    painter.drawRoundedRect(QRectF(batteryRect.left() + 10, batteryRect.top() - 10,
-                                   batteryRect.width() - 20, 12),
-                            3, 3);
+    painter.drawRoundedRect(QRectF(batteryRect.left() + m_batteryCapXOffset,
+                                   batteryRect.top() - m_batteryCapYOffset,
+                                   batteryRect.width() - m_batteryCapWidthOffset,
+                                   m_batteryCapHeight),
+                            m_batteryCapRadius, m_batteryCapRadius);
 
-    painter.setPen(QPen(battery, 6));
+    painter.setPen(QPen(battery, m_batteryOuterPenWidth));
     painter.setBrush(Qt::NoBrush);
-    painter.drawRoundedRect(batteryRect, 6, 6);
+    painter.drawRoundedRect(batteryRect, m_batteryOuterRadius, m_batteryOuterRadius);
 
-    const QRectF batteryInner = batteryRect.adjusted(7, 7, -7, -7);
+    const QRectF batteryInner = batteryRect.adjusted(m_batteryInnerOffset,
+                                                     m_batteryInnerOffset,
+                                                     -m_batteryInnerOffset,
+                                                     -m_batteryInnerOffset);
+
     // Fill the battery from bottom to top.
     // A high percent fills almost the whole battery. A low percent fills only the bottom.
     const auto &batteryLimit = batteryInfo();
@@ -445,33 +464,38 @@ void Canvas::drawSideIndicators(QPainter &painter, const QRectF &rect) const
                                  batteryInner.height() * batteryFill);
     painter.setPen(Qt::NoPen);
     painter.setBrush(battery);
-    painter.drawRoundedRect(batteryFillRect, 2, 2);
+    painter.drawRoundedRect(batteryFillRect, m_batteryFillRadius, m_batteryFillRadius);
 
     QFont textFont = painter.font();
-    textFont.setFamily("Sans Serif");
-    textFont.setPointSize(14);
+    textFont.setFamily(m_defaultFontFamily);
+    textFont.setPointSize(m_batteryFontSize);
     textFont.setBold(true);
     painter.setFont(textFont);
     painter.setPen(Qt::white);
-    painter.drawText(QRectF(batteryRect.left() - 6, batteryRect.bottom() + 2,
-                            batteryRect.width() + 12, 26),
+    painter.drawText(QRectF(batteryRect.left() - m_batteryTextXOffset,
+                            batteryRect.bottom() + m_batteryTextYOffset,
+                            batteryRect.width() + m_batteryTextWidthOffset,
+                            m_batteryTextHeight),
                      Qt::AlignCenter, QString("%1%").arg(m_batteryLevel));
 
     QFont tempIconFont(m_iconFontFamily);
-    tempIconFont.setPointSize(42);
+    tempIconFont.setPointSize(m_tempIconFontSize);
     painter.setFont(tempIconFont);
     painter.setPen(temperatureColor());
-    painter.drawText(QRectF(batteryRect.left(), rect.bottom() - 104,
-                            batteryRect.width(), 56),
+    painter.drawText(QRectF(batteryRect.left(),
+                            rect.bottom() - m_tempIconYOffset,
+                            batteryRect.width(),
+                            m_tempIconRectHeight),
                      Qt::AlignCenter, QString(QChar(m_TemperatureIcon)));
 
     painter.setFont(textFont);
     painter.setPen(Qt::white);
-    painter.drawText(QRectF(batteryRect.left() - 8, rect.bottom() - 48,
-                            batteryRect.width() + 16, 28),
+    painter.drawText(QRectF(batteryRect.left() - m_tempTextXOffset,
+                            rect.bottom() - m_tempTextYOffset,
+                            batteryRect.width() + m_tempTextWidthOffset,
+                            m_tempTextHeight),
                      Qt::AlignCenter, QString("%1 \u00b0C").arg(m_temperature));
 }
-
 void Canvas::drawCommunication(QPainter &painter, const QRectF &rect) const
 {
     const QString statusIcon{QChar(m_ErrorIcon)};

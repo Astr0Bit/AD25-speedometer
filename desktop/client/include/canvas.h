@@ -121,6 +121,28 @@ private:
     const int m_commRectWidth{200};
     const int m_commRectHeight{70};
 
+    const int m_arrowRectWidth{58};
+    const int m_arrowRectHeight{52};
+
+    const int m_batteryRectWidth{46};
+    const int m_batteryRectHeight{86};
+    const int m_batteryOuterPenWidth{6};
+    const int m_batteryOuterRadius{6};
+
+    const int m_batteryCapHeight{12};
+    const int m_batteryCapWidthOffset{20};
+    const int m_batteryCapRadius{3};
+
+    const int m_batteryFillRadius{2};
+
+    const int m_batteryTextWidthOffset{12};
+    const int m_batteryTextHeight{26};
+
+    const int m_tempIconRectHeight{56};
+
+    const int m_tempTextWidthOffset{16};
+    const int m_tempTextHeight{28};
+
     // Offsets
     const int m_needleTailOffset{4};
     const int m_needleLengthOffset{36};
@@ -143,6 +165,26 @@ private:
     const int m_commXOffset{100};
     const int m_commYOffset{58};
 
+    const int m_rightArrowXOffset{76};
+    const int m_leftArrowXOffset{18};
+    const int m_arrowYOffset{28};
+
+    const int m_batteryRectXOffset{92};
+    const int m_batteryRectYOffset{150};
+
+    const int m_batteryCapXOffset{10};
+    const int m_batteryCapYOffset{10};
+
+    const int m_batteryInnerOffset{7};
+
+    const int m_batteryTextXOffset{6};
+    const int m_batteryTextYOffset{2};
+
+    const int m_tempIconYOffset{104};
+
+    const int m_tempTextXOffset{8};
+    const int m_tempTextYOffset{48};
+
     // Font families
     QString m_iconFontFamily{"Material Icons"};
     QString m_defaultFontFamily{"Sans Serif"};
@@ -156,6 +198,9 @@ private:
     const int m_unitFontSize{22};
     const int m_speedIconFontSize{32};
     const int m_speedLabelFontSize{17};
+
+    const int m_batteryFontSize{14};
+    const int m_tempIconFontSize{42};
 
     // Messages
     const QString m_commErrorMsg{"Connection Error"};
