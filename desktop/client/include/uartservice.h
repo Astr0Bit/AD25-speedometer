@@ -4,9 +4,17 @@
 #include <QThread>
 #include "comservice.h"
 
-class UARTService : public COMService, public QThread
+class UARTService : public QThread, public COMService
 {
-    void run() override {}; // won't compile otherwise
+    Q_OBJECT
+private:
+    std::atomic_bool m_stop{false};
+public:
+    explicit UARTService(QObject* parent = nullptr);
+    ~UARTService() override;
+
+protected:
+    void run() override;
 };
 
 #endif
