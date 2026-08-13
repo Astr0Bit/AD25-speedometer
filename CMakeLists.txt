@@ -2,111 +2,101 @@ cmake_minimum_required(VERSION 3.30)
 
 project(bootcamp LANGUAGES CXX)
 
+option(UARTCOM "Use UART instead of TCP for communication" OFF)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 
-find_package(Threads)
+find_package(Threads REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia SerialPort)
 
 set(CLIENT_DIR ${CMAKE_SOURCE_DIR}/desktop/client)
 set(SERVER_DIR ${CMAKE_SOURCE_DIR}/desktop/server)
-set(ESP32_CLIENT_DIR ${CMAKE_SOURCE_DIR}/esp32/client)
-set(ESP32_SERVER_DIR ${CMAKE_SOURCE_DIR}/esp32/server)
 set(USER_FONTS_DIR $ENV{HOME}/.local/share/fonts)
 set(FONT_FILENAME MaterialIcons.ttf)
 
 if(NOT EXISTS ${USER_FONTS_DIR}/${FONT_FILENAME})
     message(STATUS "Copying ${FONT_FILENAME} -> ${USER_FONTS_DIR}/${FONT_FILENAME}")
-    execute_process(
-        COMMAND mkdir -p "${USER_FONTS_DIR}"
-        COMMAND cp "${CLIENT_DIR}/res/${FONT_FILENAME}" "${USER_FONTS_DIR}/${FONT_FILENAME}"
-        COMMAND fc-cache -f -v "${USER_FONTS_DIR}"
-    )
+    file(MAKE_DIRECTORY ${USER_FONTS_DIR})
+    file(COPY_FILE ${CLIENT_DIR}/res/${FONT_FILENAME} ${USER_FONTS_DIR}/${FONT_FILENAME})
+    execute_process(COMMAND fc-cache -f -v "${USER_FONTS_DIR}")
 endif()
 
-set(COM_SRC_FILENAMES
-    comservice.cpp
-    tcpservice.cpp
-    uartservice.cpp
+set(COMMON_SOURCES_BASENAMES
+    comservice
+    tcpservice
+    uartservice
+    window
 )
-foreach(cpp IN LISTS COM_SRC_FILENAMES)
-    get_filename_component(cppbase ${cpp} NAME_WE)
-    string(TOUPPER ${cppbase} CPPBASE)
-    set(CLIENT_${CPPBASE} ${CLIENT_DIR}/src/${cpp})
-    set(SERVER_${CPPBASE} ${SERVER_DIR}/src/${cpp})
+foreach(basename IN LISTS COMMON_SOURCES_BASENAMES)
+    string(TOUPPER ${basename} BASENAME)
+    set(CLIENT_${BASENAME} ${CLIENT_DIR}/include/${basename}.h ${CLIENT_DIR}/src/${basename}.cpp)
+    set(SERVER_${BASENAME} ${SERVER_DIR}/include/${basename}.h ${SERVER_DIR}/src/${basename}.cpp)
 endforeach()
+
+set(CLIENT_SOURCES
+    ${CLIENT_DIR}/main.cpp
+    ${CLIENT_DIR}/include/canvas.h ${CLIENT_DIR}/src/canvas.cpp
+    ${CLIENT_WINDOW}
+    ${CLIENT_COMSERVICE}
+)
+set(SERVER_SOURCES
+    ${SERVER_DIR}/main.cpp
+    ${SERVER_WINDOW}
+    ${SERVER_COMSERVICE}
+)
+set(CLIENT_LIBS Threads::Threads Qt6::Core Qt6::Widgets Qt6::Multimedia)
+set(SERVER_LIBS Threads::Threads Qt6::Core Qt6::Widgets)
+set(CLIENT_DEFS)
+set(SERVER_DEFS)
+
+if(UARTCOM)
+    set(CLIENT_UPORT "/dev/ttyUSB0" CACHE STRING "")
+    set(SERVER_UPORT "/dev/ttyUSB1" CACHE STRING "")
+
+    list(APPEND CLIENT_SOURCES ${CLIENT_UARTSERVICE})
+    list(APPEND CLIENT_LIBS Qt6::SerialPort)
+    list(APPEND CLIENT_DEFS UARTCOM UART_PORT="${CLIENT_UPORT}")
+
+    list(APPEND SERVER_SOURCES ${SERVER_UARTSERVICE})
+    list(APPEND SERVER_LIBS Qt6::SerialPort)
+    list(APPEND SERVER_DEFS UARTCOM UART_PORT="${SERVER_UPORT}")
+
+    add_custom_target(upload_client 
+        COMMAND pio run -t upload --upload-port ${CLIENT_UPORT}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/esp32/client
+        VERBATIM
+    )
+    add_custom_target(upload_server 
+        COMMAND pio run -t upload --upload-port ${SERVER_UPORT}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/esp32/server
+        VERBATIM
+    )
+else()
+    list(APPEND CLIENT_SOURCES ${CLIENT_TCPSERVICE})
+    list(APPEND SERVER_SOURCES ${SERVER_TCPSERVICE})
+endif()
 
 qt_standard_project_setup()
 
-qt_add_library(client-comservice STATIC ${CLIENT_COMSERVICE})
-target_include_directories(client-comservice PUBLIC ${CLIENT_DIR}/include shared)
-qt_add_library(server-comservice STATIC ${SERVER_COMSERVICE})
-target_include_directories(server-comservice PUBLIC ${SERVER_DIR}/include shared)
+qt_add_executable(client ${CLIENT_SOURCES})
+target_include_directories(client PRIVATE ${CLIENT_DIR}/include shared)
+target_compile_definitions(client PRIVATE ${CLIENT_DEFS})
+target_link_libraries(client PRIVATE ${CLIENT_LIBS})
 
-qt_add_library(client-tcpservice STATIC ${CLIENT_TCPSERVICE})
-target_link_libraries(client-tcpservice PUBLIC client-comservice Qt6::Core)
-qt_add_library(server-tcpservice STATIC ${SERVER_TCPSERVICE})
-target_link_libraries(server-tcpservice PUBLIC server-comservice Qt6::Core)
+qt_add_executable(server ${SERVER_SOURCES})
+target_include_directories(server PRIVATE ${SERVER_DIR}/include shared)
+target_compile_definitions(server PRIVATE ${SERVER_DEFS})
+target_link_libraries(server PRIVATE ${SERVER_LIBS})
 
-qt_add_library(client-uartservice STATIC ${CLIENT_UARTSERVICE})
-target_compile_definitions(client-uartservice PUBLIC UARTCOM)
-target_link_libraries(client-uartservice PUBLIC client-comservice Qt6::Core Qt6::SerialPort)
-qt_add_library(server-uartservice STATIC ${SERVER_UARTSERVICE})
-target_compile_definitions(server-uartservice PUBLIC UARTCOM)
-target_link_libraries(server-uartservice PUBLIC server-comservice Qt6::Core Qt6::SerialPort)
-
-set(CLIENT_GUI_SRC 
-    ${CLIENT_DIR}/main.cpp
-    ${CLIENT_DIR}/src/window.cpp
-    ${CLIENT_DIR}/src/canvas.cpp
-)
-set(SERVER_GUI_SRC 
-    ${SERVER_DIR}/main.cpp
-    ${SERVER_DIR}/src/window.cpp
-)
-set(COMMON_GUI_LIBS 
-    Qt6::Core
-    Qt6::Widgets
-    Threads::Threads
-)
-
-qt_add_executable(client-tcp ${CLIENT_GUI_SRC})
-target_link_libraries(client-tcp PRIVATE 
-    ${COMMON_GUI_LIBS}
-    Qt6::Multimedia
-    client-tcpservice
-)
-qt_add_executable(server-tcp ${SERVER_GUI_SRC})
-target_link_libraries(server-tcp PRIVATE
-    ${COMMON_GUI_LIBS}
-    server-tcpservice
-)
-
-qt_add_executable(client-uart ${CLIENT_GUI_SRC})
-target_link_libraries(client-uart PRIVATE 
-    ${COMMON_GUI_LIBS}
-    Qt6::Multimedia
-    client-uartservice
-)
-qt_add_executable(server-uart ${SERVER_GUI_SRC})
-target_link_libraries(server-uart PRIVATE
-    ${COMMON_GUI_LIBS}
-    server-uartservice
-)
-
-add_custom_target(tcp)
-add_dependencies(tcp client-tcp server-tcp)
-
-add_custom_target(upload-client 
-    COMMAND pio run -t upload
-    WORKING_DIRECTORY ${ESP32_CLIENT_DIR}
+add_custom_target(use_tcp
+    COMMAND ${CMAKE_COMMAND} -DUARTCOM:BOOL=OFF -S ${CMAKE_SOURCE_DIR} -B ${CMAKE_BINARY_DIR}
     VERBATIM
 )
-add_custom_target(upload-server 
-    COMMAND pio run -t upload
-    WORKING_DIRECTORY ${ESP32_SERVER_DIR}
+add_custom_target(use_uart
+    COMMAND ${CMAKE_COMMAND} -DUARTCOM:BOOL=ON -S ${CMAKE_SOURCE_DIR} -B ${CMAKE_BINARY_DIR}
     VERBATIM
 )
