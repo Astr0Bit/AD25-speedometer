@@ -64,14 +64,23 @@ if(UARTCOM)
     list(APPEND SERVER_SOURCES ${SERVER_UARTSERVICE})
     list(APPEND SERVER_LIBS Qt6::SerialPort)
     list(APPEND SERVER_DEFS UARTCOM UART_PORT="${SERVER_UPORT}")
+    
+    find_program(PIO_EXECUTABLE
+        NAMES pio
+        HINTS "$ENV{HOME}/.platformio/penv/bin"
+    )
+
+    if(NOT PIO_EXECUTABLE)
+        message(FATAL_ERROR "PlatformIO 'pio' executable not found. Install it or set PIO_EXECUTABLE manually.")
+    endif()
 
     add_custom_target(upload_client 
-        COMMAND pio run -t upload --upload-port ${CLIENT_UPORT}
+        COMMAND ${PIO_EXECUTABLE} run -t upload --upload-port ${CLIENT_UPORT}
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/esp32/client
         VERBATIM
     )
     add_custom_target(upload_server 
-        COMMAND pio run -t upload --upload-port ${SERVER_UPORT}
+        COMMAND ${PIO_EXECUTABLE} run -t upload --upload-port ${SERVER_UPORT}
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/esp32/server
         VERBATIM
     )
