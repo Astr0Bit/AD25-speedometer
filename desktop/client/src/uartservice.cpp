@@ -1,9 +1,10 @@
 #include <QDebug>
-#include "setting.h"
 #include <QSerialPort>
+#include <cstring>
+#include "setting.h"
 #include "uartservice.h"
 
-UARTService::UARTService(QObject* parent) : QThread{parent}, COMService{}
+UARTService::UARTService(QObject* parent) : COMService{}, QThread{parent}
 {
     this->start();
 }
@@ -17,15 +18,19 @@ UARTService::~UARTService()
 void UARTService::run()
 {
     QSerialPort serial;
-    serial.setPortName(QString{UART_CPORT});
+    serial.setPortName(QString{UART_PORT});
     serial.setBaudRate(BAUDRATE);
+    serial.setDataBits(QSerialPort::Data8);
+    serial.setParity(QSerialPort::NoParity);
+    serial.setStopBits(QSerialPort::OneStop);
+    serial.setFlowControl(QSerialPort::NoFlowControl);
 
     uint8_t tmpbuf[SBUFLEN];
     while (!m_stop)
     {
         if (!m_status)
         {
-            qDebug() << "Trying to open serialport...  PORT_NAME:" << UART_CPORT << " BAUDRATE:" << BAUDRATE;
+            qDebug() << "Trying to open serialport...  PORT_NAME:" << UART_PORT << " BAUDRATE:" << BAUDRATE;
             if (!serial.open(QIODevice::ReadOnly))
             {
                 qWarning() << "  Failed to open serialport: " << serial.error();
@@ -36,7 +41,7 @@ void UARTService::run()
             qDebug() << "Opened serialport";
         }
 
-        if (serial.waitForReadyRead(Setting::INTERVAL))
+        if (serial.waitForReadyRead(-1))
         {
             size_t nread{0};
             bool ok{true};
@@ -57,15 +62,21 @@ void UARTService::run()
                 }
                 else
                 {
-                    ok = false;
-                    qWarning() << "Not enough bytes received:  Expected:" << SBUFLEN << " Actual:" << nread;
-                    break;
+                    if (!serial.waitForReadyRead(499))
+                    {
+                        ok = false;
+                        qWarning() << "Not enough bytes received:  Expected:" << SBUFLEN << " Actual:" << nread;
+                        break;
+                    }
                 }
             }
             if (ok)
             {
-                std::lock_guard<std::mutex> lock{m_mtx};
-                std::memcpy(m_buffer, tmpbuf, SBUFLEN);
+                {
+                    std::lock_guard<std::mutex> lock{m_mtx};
+                    std::memcpy(m_buffer, tmpbuf, SBUFLEN);
+                }
+                qDebug() << "Received: " << tmpbuf[0] << " " << tmpbuf[1] << " " << tmpbuf[2];
             }
         }
         else if (serial.error() == QSerialPort::SerialPortError::TimeoutError)

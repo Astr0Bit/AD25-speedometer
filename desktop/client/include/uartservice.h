@@ -4,10 +4,8 @@
 #include <QThread>
 #include "comservice.h"
 
-class UARTService : public QThread, public COMService
+class UARTService : public COMService, public QThread
 {
-    Q_OBJECT
-private:
     std::atomic_bool m_stop{false};
 public:
     explicit UARTService(QObject* parent = nullptr);
