@@ -3,7 +3,6 @@
 
 #include <QDebug>
 #include <netdb.h>
-#include <iostream>
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <netinet/in.h>

@@ -1,6 +1,5 @@
 #include "window.h"
 #include "setting.h"
-#include <iostream>
 #include "comservice.h"
 
 // * Resources used:
@@ -33,7 +32,16 @@ static void make_grid(QGridLayout &grid_layout, QWidget *(&cols)[COLS][ROWS])
             // Set fixed width to the labels
             if (QLabel *label = dynamic_cast<QLabel *>(widget))
             {
-                label->setFixedWidth(120);
+                // Make labels wider
+                if (col == (COLS - 1))
+                {
+                    label->setIndent(5);
+                    label->setFixedWidth(70);
+                }
+                else {
+                    label->setIndent(15);
+                    label->setFixedWidth(120);
+                }
             }
 
             grid_layout.addWidget(widget, static_cast<int>(row), static_cast<int>(col), 1, 1);
