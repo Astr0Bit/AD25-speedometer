@@ -11,6 +11,7 @@ public:
     explicit UARTService(QObject* parent = nullptr);
     ~UARTService() override;
 
+    bool isRunning() const noexcept;
 protected:
     void run() override;
 };

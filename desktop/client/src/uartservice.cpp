@@ -15,6 +15,11 @@ UARTService::~UARTService()
     this->wait();
 }
 
+bool UARTService::isRunning() const noexcept
+{
+    return !m_stop;
+}
+
 void UARTService::run()
 {
     QSerialPort serial;
@@ -41,7 +46,7 @@ void UARTService::run()
             qDebug() << "Opened serialport";
         }
 
-        if (serial.waitForReadyRead(-1))
+        if (serial.waitForReadyRead(3 * Setting::INTERVAL))
         {
             size_t nread{0};
             bool ok{true};
@@ -62,7 +67,7 @@ void UARTService::run()
                 }
                 else
                 {
-                    if (!serial.waitForReadyRead(499))
+                    if (!serial.waitForReadyRead(20))
                     {
                         ok = false;
                         qWarning() << "Not enough bytes received:  Expected:" << SBUFLEN << " Actual:" << nread;
@@ -72,11 +77,8 @@ void UARTService::run()
             }
             if (ok)
             {
-                {
-                    std::lock_guard<std::mutex> lock{m_mtx};
-                    std::memcpy(m_buffer, tmpbuf, SBUFLEN);
-                }
-                qDebug() << "Received: " << tmpbuf[0] << " " << tmpbuf[1] << " " << tmpbuf[2];
+                std::lock_guard<std::mutex> lock{m_mtx};
+                std::memcpy(m_buffer, tmpbuf, SBUFLEN);
             }
         }
         else if (serial.error() == QSerialPort::SerialPortError::TimeoutError)
