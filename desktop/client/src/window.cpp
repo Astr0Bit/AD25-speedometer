@@ -9,13 +9,6 @@ Window::Window(COMService &com_service, QWidget *parent)
 {
     setWindowTitle("Speedometer client");
 
-    // Initial state
-    m_canvas.setSpeed(0);
-    m_canvas.setTemperature(0);
-    m_canvas.setBatteryLevel(0);
-    m_canvas.setCommunicationStatus(false);
-    m_canvas.setLightSignals(false, false);
-
     m_layout.setContentsMargins(0, 0, 0, 0);
     m_layout.addWidget(&m_canvas, 0, 0);
 
