@@ -38,6 +38,7 @@ TCPService::TCPService()
         qCritical() << "setsockopt failed...";
         close(sockfd);
         m_is_running.store(false);
+        return;
     }
 
     // Bind the socket address to the socket
