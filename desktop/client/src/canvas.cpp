@@ -1,13 +1,9 @@
 #include <QPen>
-#include <QDir>
 #include <QFont>
 #include <QtMath>
 #include "canvas.h"
 #include "setting.h"
-#include <QFileInfo>
 #include <QFontDatabase>
-#include <QStandardPaths>
-#include <QCoreApplication>
 #include <iostream>
 
 // Helper functions for getting Info structs for the required signals
@@ -26,31 +22,29 @@ const auto &batteryInfo()
     return Setting::Signal::handle()["battery_level"];
 }
 
+// Helper method to get audio file paths
+static QString resolveAudioPath(const QString &baseDir, const QString &fileName)
+{
+    QString cleanPath = QDir::cleanPath(baseDir + fileName);
+    return QFileInfo(cleanPath).absoluteFilePath();
+}
+
 // * === Canvas class === *
 // Constructor
 Canvas::Canvas(QWidget *parent)
-    : QWidget(parent)
-{
-    // Construct relative paths to find the audio files and fonts
-    const QString appDir = QCoreApplication::applicationDirPath() + "/";
-    const QString resDir = QDir::cleanPath(appDir + "../desktop/client/res") + "/";
+    : QWidget(parent),
 
+      // Get absolute paths for the respective audio files
+      m_leftSignalSoundPath(resolveAudioPath(m_resDir, m_leftSignalSoundFileName)),
+      m_rightSignalSoundPath(resolveAudioPath(m_resDir, m_rightSignalSoundFileName)),
+      m_warningSignalSoundPath(resolveAudioPath(m_resDir, m_warningSignalSoundFileName))
+{
     // Find the icon font
-    const int fontId = QFontDatabase::addApplicationFont(resDir + m_iconFontFamilyFileName);
+    const int fontId = QFontDatabase::addApplicationFont(m_resDir + m_iconFontFamilyFileName);
     if (fontId != -1)
     {
         m_iconFontFamily = QFontDatabase::applicationFontFamilies(fontId).value(0, m_iconFontFamily);
     }
-
-    // Get relative paths for the respective audio files
-    m_leftSignalSoundPath = QDir::cleanPath(resDir + m_leftSignalSoundFileName);
-    m_rightSignalSoundPath = QDir::cleanPath(resDir + m_rightSignalSoundFileName);
-    m_warningSignalSoundPath = QDir::cleanPath(resDir + m_warningSignalSoundFileName);
-
-    // Get absolute paths for the respective audio files
-    m_leftSignalSoundPath = QFileInfo(m_leftSignalSoundPath).absoluteFilePath();
-    m_rightSignalSoundPath = QFileInfo(m_rightSignalSoundPath).absoluteFilePath();
-    m_warningSignalSoundPath = QFileInfo(m_warningSignalSoundPath).absoluteFilePath();
 
     // Attach a lambda method to the audio command
     m_signalSoundCommand = QStandardPaths::findExecutable("pw-play");
@@ -116,22 +110,19 @@ QSize Canvas::sizeHint() const
 // Setter methods
 void Canvas::setSpeed(int speed)
 {
-    const auto &info = speedInfo();
-    m_speed = qBound(info.min, speed, info.max);
+    m_speed = speed;
     update();
 }
 
 void Canvas::setTemperature(int temperature)
 {
-    const auto &info = temperatureInfo();
-    m_temperature = qBound(info.min, temperature, info.max);
+    m_temperature = temperature;
     update();
 }
 
 void Canvas::setBatteryLevel(int batteryLevel)
 {
-    const auto &info = batteryInfo();
-    m_batteryLevel = qBound(info.min, batteryLevel, info.max);
+    m_batteryLevel = batteryLevel;
     update();
 }
 
@@ -455,11 +446,10 @@ void Canvas::drawSideIndicators(QPainter &painter, const QRectF &rect) const
     const auto &batteryLimit = batteryInfo();
     const qreal batteryRange = batteryLimit.max - batteryLimit.min;
     const qreal batteryRatio = batteryRange == 0 ? 0.0 : (m_batteryLevel - batteryLimit.min) / batteryRange;
-    const qreal batteryFill = qBound(0.0, batteryRatio, 1.0);
     const QRectF batteryFillRect(batteryInner.left(),
-                                 batteryInner.top() + (batteryInner.height() * (1.0 - batteryFill)),
+                                 batteryInner.top() + (batteryInner.height() * (1.0 - batteryRatio)),
                                  batteryInner.width(),
-                                 batteryInner.height() * batteryFill);
+                                 batteryInner.height() * batteryRatio);
     painter.setPen(Qt::NoPen);
     painter.setBrush(battery);
     painter.drawRoundedRect(batteryFillRect, m_batteryFillRadius, m_batteryFillRadius);
