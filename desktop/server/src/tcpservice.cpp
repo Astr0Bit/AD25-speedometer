@@ -42,6 +42,7 @@ TCPService::TCPService()
     }
     else
     {
+        close(sockfd);
         qCritical() << "Failed to bind servaddr to the socket...";
     }
 }
