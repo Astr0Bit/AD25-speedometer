@@ -38,7 +38,8 @@ static void make_grid(QGridLayout &grid_layout, QWidget *(&cols)[COLS][ROWS])
                     label->setIndent(5);
                     label->setFixedWidth(70);
                 }
-                else {
+                else
+                {
                     label->setIndent(15);
                     label->setFixedWidth(120);
                 }
@@ -86,6 +87,9 @@ Window::Window(COMService &com_service) : m_com_service(com_service)
 
                     // std::cout << "Set buffer value for slider\n";
                 });
+
+        // Add min value for each signal to the buffer on boot
+        (m_com_service.*setterMethod)(min);
     };
 
     // Get min, max values for each slider using Setting::Signal class
@@ -125,6 +129,9 @@ Window::Window(COMService &com_service) : m_com_service(com_service)
     connect(&box_left, &QCheckBox::toggled, this, updateLights);
     connect(&box_right, &QCheckBox::toggled, this, updateLights);
     connect(&box_warning, &QCheckBox::toggled, this, updateLights);
+
+    // Set initial light signal values in buffer
+    updateLights();
 
     // Link the box layout to the slider layout
     sld_layout.addLayout(&box_layout, 3, 1);
