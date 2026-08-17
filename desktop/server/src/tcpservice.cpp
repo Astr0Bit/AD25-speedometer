@@ -3,17 +3,90 @@
 
 #include <QDebug>
 #include <netdb.h>
-#include <iostream>
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 
-// Private
-void TCPService::serverWorker(int sockfd)
+// Public
+TCPService::TCPService()
 {
-    if (0 == listen(sockfd, Setting::TCP::N_CONNS))
+    // Attempt to create the TCP / IP socket
+    int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    if (sockfd == -1)
     {
-        std::cout << "Listening for incoming connections...\n";
+        qCritical() << "Failed to create TCP/IP socket!";
+        m_is_running.store(false);
+        return;
+    }
+    else
+    {
+        qDebug() << "Created TCP/IP socket";
+    }
+
+    // Create an internet socket address
+    sockaddr_in servaddr{};
+
+    // Assign IP and PORT
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(Setting::TCP::SERVER_PORT);
+    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    // To bypass socket cooldown
+    int opt = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
+    {
+        qCritical() << "setsockopt failed...";
+        close(sockfd);
+        m_is_running.store(false);
+        return;
+    }
+
+    // Bind the socket address to the socket
+    if (0 == bind(sockfd, (sockaddr *)&servaddr, sizeof(servaddr)))
+    {
+        qDebug() << "Spawned TCP/IP server worker thread";
+
+        // Spawn and hand the sockfd and thread to the TCPService object
+        m_sockfd = sockfd;
+        m_worker = std::thread(&TCPService::run, this);
+    }
+    else
+    {
+        qCritical() << "Failed to bind servaddr to the socket...";
+        close(sockfd);
+        m_is_running.store(false);
+    }
+}
+
+bool TCPService::isRunning()
+{
+    return m_is_running.load();
+}
+
+TCPService::~TCPService()
+{
+    m_is_running.store(false);
+
+    // Close the socket
+    if (m_sockfd != -1)
+    {
+        shutdown(m_sockfd, SHUT_RDWR);
+        close(m_sockfd);
+    }
+
+    // Join the worker thread
+    if (m_worker.joinable())
+    {
+        m_worker.join();
+    }
+}
+
+// Protected
+void TCPService::run(void)
+{
+    if (0 == listen(m_sockfd, Setting::TCP::N_CONNS))
+    {
+        qDebug() << "Listening for incoming connections...";
 
         // Outer loop -> Constantly checks for new incomming connection requests
         while (true)
@@ -22,15 +95,15 @@ void TCPService::serverWorker(int sockfd)
             sockaddr_in cli{};
             socklen_t len = sizeof(cli);
 
-            int connfd = accept(sockfd, (sockaddr *)&cli, &len);
+            int connfd = accept(m_sockfd, (sockaddr *)&cli, &len);
 
             // Established connection
             if (connfd >= 0)
             {
-                std::cout << "Server accepted the client...\n";
+                qDebug() << "Server accepted the client...";
                 m_status.store(true);
 
-                while (true)
+                while (m_is_running)
                 {
                     // * Periodically send the COMService buffer
 
@@ -54,7 +127,7 @@ void TCPService::serverWorker(int sockfd)
                     // In case the connection silently drops
                     if (bytes_sent <= 0)
                     {
-                        std::cout << "Connection lost\n";
+                        qDebug() << "Connection lost";
                         m_status.store(false);
                         break; // Drops down to the shutdown and close section
                     }
@@ -71,50 +144,12 @@ void TCPService::serverWorker(int sockfd)
                     break;
                 }
 
-                std::cout << "Failed to accept the connection...\n";
+                qCritical() << "Failed to accept the connection...";
             }
         }
     }
     else
     {
-        std::cout << "Failed to listen to the port...\n";
-    }
-}
-
-// Protected
-void TCPService::run(void)
-{
-    // Attempt to create the TCP / IP socket
-    int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-    if (sockfd == -1)
-    {
-        std::cout << "Failed to create TCP/IP socket, exiting...\n";
-        std::exit(EXIT_FAILURE);
-    }
-    else
-    {
-        std::cout << "Created TCP/IP socket\n";
-    }
-
-    // Create an internet socket address
-    sockaddr_in servaddr{};
-
-    // Assign IP and PORT
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(Setting::TCP::SERVER_PORT);
-    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-    // Bind the socket address to the socket
-    if (0 == bind(sockfd, (sockaddr *)&servaddr, sizeof(servaddr)))
-    {
-        std::cout << "Spawned TCP/IP server worker thread\n";
-
-        // Spawn and hand the sockfd and thread to the TCPService object
-        m_sockfd = sockfd;
-        m_workerThread = std::thread(&TCPService::serverWorker, this, sockfd);
-    }
-    else
-    {
-        std::cout << "Failed to bind servaddr to the socket...\n";
+        qCritical() << "Failed to listen to the port...";
     }
 }

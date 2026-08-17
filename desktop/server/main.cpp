@@ -16,11 +16,18 @@ int main(int argc, char **argv)
     QFont defaultFont("Arial", 10, QFont::Normal);
     app.setFont(defaultFont);
 
-    #ifdef UARTCOM
+#ifdef UARTCOM
     UARTService service;
-    #else
+#else
     TCPService service;
-    #endif
+    if (!service.isRunning())
+    {
+        qCritical() << "Failed to create service, exiting...";
+        std::exit(EXIT_FAILURE);
+    }
+#endif
+
+    qDebug() << "Starting server GUI...";
 
     Window window(service);
     window.show();
