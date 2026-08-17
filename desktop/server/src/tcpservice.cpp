@@ -31,6 +31,15 @@ TCPService::TCPService()
     servaddr.sin_port = htons(Setting::TCP::SERVER_PORT);
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
+    // To bypass socket cooldown
+    int opt = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
+    {
+        qCritical() << "setsockopt failed...";
+        close(sockfd);
+        m_is_running.store(false);
+    }
+
     // Bind the socket address to the socket
     if (0 == bind(sockfd, (sockaddr *)&servaddr, sizeof(servaddr)))
     {
@@ -42,8 +51,9 @@ TCPService::TCPService()
     }
     else
     {
-        close(sockfd);
         qCritical() << "Failed to bind servaddr to the socket...";
+        close(sockfd);
+        m_is_running.store(false);
     }
 }
 
