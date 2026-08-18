@@ -78,11 +78,8 @@ void UARTService::run()
             }
             if (ok)
             {
-                {
-                    std::lock_guard<std::mutex> lock{m_mtx};
-                    std::memcpy(m_buffer, tmpbuf, SBUFLEN);
-                }
-                qDebug() << "Received: " << tmpbuf[0] << " " << tmpbuf[1] << " " << tmpbuf[2];
+                std::lock_guard<std::mutex> lock{m_mtx};
+                std::memcpy(m_buffer, tmpbuf, SBUFLEN);
             }
         }
         else
