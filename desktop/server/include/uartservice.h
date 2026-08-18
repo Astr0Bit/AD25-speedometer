@@ -2,12 +2,33 @@
 #define UARTCOM_H
 
 #include <QThread>
+#include <QSerialPort>
 #include "comservice.h"
 
-class UARTService : public COMService, public QThread
+class UARTService : public COMService,
+                    public QThread
 {
-    // * Just for testing
-    void run(void) override {};
+public:
+    // Constructor to begin sending data over UART
+    explicit UARTService(QObject *parent = nullptr);
+
+    // Helper method to get running status
+    bool isRunning()
+    {
+        return m_isRunning.load();
+    }
+
+    // Destructor to clean up
+    ~UARTService();
+
+private:
+    QSerialPort m_serial;
+    std::atomic_bool m_isRunning{true};
+
+    // Constants
+    const QString m_portName{"/dev/ttyUSB0"};
+
+    void run(void) override;
 };
 
 #endif
