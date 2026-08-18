@@ -10,12 +10,16 @@
 class Window : public QDialog
 {
 public:
-    explicit Window(QWidget *parent = nullptr);
+    explicit Window(COMService &com_service, QWidget *parent = nullptr);
 
 private:
-    Canvas canvas_;
-    QGridLayout layout_;
-    QTimer blinkTimer_;
+    Canvas m_canvas;
+    QTimer m_blinkTimer;
+    QGridLayout m_layout;
+    COMService &m_com_service;
+
+    // Periodically check connection status, and read buffer
+    QTimer m_connBufTimer;
 };
 
 #endif

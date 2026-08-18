@@ -6,7 +6,7 @@
 #include "tcpservice.h"
 #endif
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
 #ifdef UARTCOM
@@ -15,7 +15,7 @@ int main(int argc, char** argv)
     TCPService service;
 #endif
 
-    Window window;
+    Window window(service);
     window.show();
 
     return app.exec();
