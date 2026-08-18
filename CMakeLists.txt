@@ -75,12 +75,14 @@ if(UARTCOM)
     endif()
 
     add_custom_target(upload_client 
-        COMMAND ${PIO_EXECUTABLE} run -t upload --upload-port ${CLIENT_UPORT}
+        COMMAND ${CMAKE_COMMAND} -E env PLATFORMIO_BUILD_FLAGS="-DUARTCOM" 
+                ${PIO_EXECUTABLE} run -t upload --upload-port ${CLIENT_UPORT}
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/esp32/client
         VERBATIM
     )
     add_custom_target(upload_server 
-        COMMAND ${PIO_EXECUTABLE} run -t upload --upload-port ${SERVER_UPORT}
+        COMMAND ${CMAKE_COMMAND} -E env PLATFORMIO_BUILD_FLAGS="-DUARTCOM" 
+                ${PIO_EXECUTABLE} run -t upload --upload-port ${SERVER_UPORT}
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/esp32/server
         VERBATIM
     )
