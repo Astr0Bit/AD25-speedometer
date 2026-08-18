@@ -63,6 +63,7 @@ void UARTService::run()
                     ok = false;
                     serial.close();
                     qWarning() << "Failed to read: " << serial.error();
+                    this->msleep(Setting::UART::CLIENT_RETRY_OPEN_INTERVAL);
                     break;
                 }
                 else
@@ -77,19 +78,19 @@ void UARTService::run()
             }
             if (ok)
             {
-                std::lock_guard<std::mutex> lock{m_mtx};
-                std::memcpy(m_buffer, tmpbuf, SBUFLEN);
+                {
+                    std::lock_guard<std::mutex> lock{m_mtx};
+                    std::memcpy(m_buffer, tmpbuf, SBUFLEN);
+                }
+                qDebug() << "Received: " << tmpbuf[0] << " " << tmpbuf[1] << " " << tmpbuf[2];
             }
-        }
-        else if (serial.error() == QSerialPort::SerialPortError::TimeoutError)
-        {
-            qWarning() << "Timeout: Server took longer than expected";
         }
         else
         {
             m_status = false;
             serial.close();
             qWarning() << "Failed waiting for ready read: " << serial.error();
+            this->msleep(Setting::UART::CLIENT_RETRY_OPEN_INTERVAL);
         }
     }
 
