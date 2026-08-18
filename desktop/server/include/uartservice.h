@@ -22,7 +22,6 @@ public:
     ~UARTService();
 
 private:
-    QSerialPort m_serial;
     std::atomic_bool m_isRunning{true};
 
     // Constants

@@ -4,59 +4,29 @@
 #include "uartservice.h"
 
 // Public
-UARTService::UARTService(QObject *parent)
+UARTService::UARTService(QObject *parent) : QThread(parent)
 {
-    (void)parent;
+    m_isRunning.store(true);
 
-    // Configure serial
-    m_serial.setPortName(m_portName);
-    qDebug() << "Set port name to" << m_portName;
-
-    m_serial.setBaudRate(BAUDRATE);
-    qDebug() << "Set baud rate to" << BAUDRATE;
-
-    if (!m_serial.setDataBits(QSerialPort::Data8))
-    {
-        qCritical() << "Falied to set data bits for port!";
-        m_isRunning.store(false);
-        return;
-    }
-    if (!m_serial.setParity(QSerialPort::NoParity))
-    {
-        qCritical() << "Failed to set parity for port!";
-        m_isRunning.store(false);
-        return;
-    }
-    if (!m_serial.setStopBits(QSerialPort::OneStop))
-    {
-        qCritical() << "Failed to set stop bit for port!";
-        m_isRunning.store(false);
-        return;
-    }
-
-    if (!m_serial.setFlowControl(QSerialPort::NoFlowControl))
-    {
-        qCritical() << "Failed to set flow control for port!";
-        m_isRunning.store(false);
-        return;
-    }
+    // Create a temporary port to check the ESP32 server is connected
+    QSerialPort tempPort(m_portName);
 
     qDebug() << "Successfully setup serial port...";
 
-    m_serial.open(QIODeviceBase::WriteOnly);
-    if (m_serial.isOpen())
+    if (tempPort.open(QIODeviceBase::WriteOnly))
     {
-        m_status.store(true);
+        tempPort.close();
 
-        // UARTService::run() to this thread
-        m_serial.moveToThread(this);
+        m_status.store(true);
+        qDebug() << "Successfully tested serial port. Starting thread...";
 
         // Execute UARTService::run()
         this->start();
     }
     else
     {
-        qDebug() << "Serial port is NOT connected. |" << m_serial.error();
+        qDebug() << "Serial port is NOT connected. |" << tempPort.error();
+        m_status.store(false);
         m_isRunning.store(false);
     }
 }
@@ -70,12 +40,49 @@ UARTService::~UARTService()
 // Private
 void UARTService::run()
 {
+    // Configure serial
+    QSerialPort serial;
+    serial.setPortName(m_portName);
+    qDebug() << "Set port name to" << m_portName;
+
+    serial.setBaudRate(BAUDRATE);
+    qDebug() << "Set baud rate to" << BAUDRATE;
+
+    if (!serial.setDataBits(QSerialPort::Data8))
+    {
+        qCritical() << "Falied to set data bits for port!";
+        m_isRunning.store(false);
+        return;
+    }
+    if (!serial.setParity(QSerialPort::NoParity))
+    {
+        qCritical() << "Failed to set parity for port!";
+        m_isRunning.store(false);
+        return;
+    }
+    if (!serial.setStopBits(QSerialPort::OneStop))
+    {
+        qCritical() << "Failed to set stop bit for port!";
+        m_isRunning.store(false);
+        return;
+    }
+
+    if (!serial.setFlowControl(QSerialPort::NoFlowControl))
+    {
+        qCritical() << "Failed to set flow control for port!";
+        m_isRunning.store(false);
+        return;
+    }
+
+    // Open the port
+    serial.open(QIODeviceBase::WriteOnly);
+
     // Outer loop
     while (true)
     {
-        if (m_serial.isOpen())
+        if (serial.isOpen())
         {
-            qDebug() << "Serial port is connected. |" << m_serial.error();
+            qDebug() << "Serial port is connected. |" << serial.error();
 
             // Send whilst connected, and GUI is open
             while (m_isRunning)
@@ -92,15 +99,15 @@ void UARTService::run()
                 }
 
                 // Send the buffer
-                bytes_sent = m_serial.write(reinterpret_cast<const char *>(temp_buf), SBUFLEN);
+                bytes_sent = serial.write(reinterpret_cast<const char *>(temp_buf), SBUFLEN);
 
-                bool write_success = m_serial.waitForBytesWritten(100);
+                bool write_success = serial.waitForBytesWritten(100);
 
                 // Check for negative bytes, a write failure, or a flagged port error
-                if (bytes_sent < 0 || !write_success || m_serial.error() != QSerialPort::NoError)
+                if (bytes_sent < 0 || !write_success || serial.error() != QSerialPort::NoError)
                 {
                     // If the device was physically unplugged, the error usually flags as QSerialPort::ResourceError
-                    qCritical() << "Connection lost or write failed. Error code:" << m_serial.error();
+                    qCritical() << "Connection lost or write failed. Error code:" << serial.error();
                     m_status.store(false);
                     break;
                 }
@@ -110,7 +117,7 @@ void UARTService::run()
             }
 
             // Close the serial port
-            m_serial.close();
+            serial.close();
         }
 
         // Reconnection branch
@@ -120,9 +127,9 @@ void UARTService::run()
             {
                 break;
             }
-            qDebug() << "Serial port is NOT connected. |" << m_serial.error();
+            qDebug() << "Serial port is NOT connected. |" << serial.error();
             QThread::msleep(1000);
-            m_serial.open(QIODeviceBase::WriteOnly);
+            serial.open(QIODeviceBase::WriteOnly);
         }
     }
 }
