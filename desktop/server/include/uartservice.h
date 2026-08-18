@@ -26,7 +26,7 @@ private:
     std::atomic_bool m_isRunning{true};
 
     // Constants
-    const QString m_portName{"/dev/ttyUSB0"};
+    const QString m_portName{UART_PORT};
 
     void run(void) override;
 };
