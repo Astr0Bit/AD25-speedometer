@@ -6,29 +6,7 @@
 // Public
 UARTService::UARTService(QObject *parent) : QThread(parent)
 {
-    m_isRunning.store(true);
-
-    // Create a temporary port to check the ESP32 server is connected
-    QSerialPort tempPort(m_portName);
-
-    qDebug() << "Successfully setup serial port...";
-
-    if (tempPort.open(QIODeviceBase::WriteOnly))
-    {
-        tempPort.close();
-
-        m_status.store(true);
-        qDebug() << "Successfully tested serial port. Starting thread...";
-
-        // Execute UARTService::run()
-        this->start();
-    }
-    else
-    {
-        qDebug() << "Serial port is NOT connected. |" << tempPort.error();
-        m_status.store(false);
-        m_isRunning.store(false);
-    }
+    this->start();
 }
 
 UARTService::~UARTService()
@@ -78,14 +56,15 @@ void UARTService::run()
     serial.open(QIODeviceBase::WriteOnly);
 
     // Outer loop
-    while (true)
+    while (m_isRunning)
     {
         if (serial.isOpen())
         {
             qDebug() << "Serial port is connected. |" << serial.error();
+            m_status.store(true);
 
             // Send whilst connected, and GUI is open
-            while (m_isRunning)
+            while (m_isRunning && m_status)
             {
                 // * Periodically send the COMService buffer
 
@@ -123,10 +102,6 @@ void UARTService::run()
         // Reconnection branch
         else
         {
-            if (!m_isRunning)
-            {
-                break;
-            }
             qDebug() << "Serial port is NOT connected. |" << serial.error();
             QThread::msleep(1000);
             serial.open(QIODeviceBase::WriteOnly);
