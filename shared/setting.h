@@ -37,8 +37,7 @@ namespace Setting
         const signals_map_t m_signal_map;
 
         Signal() : m_signal_map{build_map()}
-        {
-        }
+        {}
 
         static signals_map_t build_map()
         {
@@ -47,7 +46,7 @@ namespace Setting
             for (size_t i = 0; i < sizeof(signals_tuple) / sizeof(signals_tuple[0]); ++i)
             {
                 std::string_view key = std::get<std::string_view>(signals_tuple[i]);
-                const Info &val = std::get<Info>(signals_tuple[i]);
+                const Info& val = std::get<Info>(signals_tuple[i]);
                 assert(SBUFLEN >= (((val.start + val.length + 7) & ~7) >> 3));
                 map[key] = val;
             }
@@ -55,13 +54,13 @@ namespace Setting
         }
 
     public:
-        static const Signal &handle()
+        static const Signal& handle()
         {
             static Signal instance;
             return instance;
         }
 
-        const Info &operator[](std::string_view key) const
+        const Info& operator[](std::string_view key) const
         {
             return m_signal_map.at(key);
         }
@@ -72,6 +71,7 @@ namespace Setting
 #ifdef UARTCOM
     namespace UART
     {
+        constexpr int CLIENT_RETRY_OPEN_INTERVAL{1000};
     }
 #else
     namespace TCP

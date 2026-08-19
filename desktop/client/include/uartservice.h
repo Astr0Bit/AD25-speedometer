@@ -6,7 +6,14 @@
 
 class UARTService : public COMService, public QThread
 {
-    void run() override {}; // won't compile otherwise
+    std::atomic_bool m_stop{false};
+public:
+    explicit UARTService(QObject* parent = nullptr);
+    ~UARTService() override;
+
+    bool isRunning() const noexcept;
+protected:
+    void run() override;
 };
 
 #endif
