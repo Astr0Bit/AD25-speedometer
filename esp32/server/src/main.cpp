@@ -5,6 +5,7 @@
 #include "nvs_flash.h"
 #include "nimble/ble.h"
 #include "host/ble_hs.h"
+#include "host/ble_sm.h"
 #include "driver/uart.h"
 #include "host/util/util.h"
 #include "nimble/nimble_port.h"
@@ -19,7 +20,7 @@
 #include <esp_task_wdt.h>
 
 // * Tag for logging
-static const char *TAG = "uart_esp_server";
+static const char *TAG = "SERVER";
 
 // Configure UART
 #define UART UART_NUM_0 // USB UART
@@ -30,6 +31,328 @@ static const char *TAG = "uart_esp_server";
 #define TX_MSG_LEN SBUFLEN
 #define RX_MSG_LEN SBUFLEN
 
+// Configure BLE
+#define PASSKEY 123456
+
+// TODO -> These should later be 128 bit
+#define BLE_SVC_UUID16 0xABC0     /* 16 Bit Service UUID */
+#define BLE_SVC_CHR_UUID16 0xABC1 /* 16 Bit Service Characteristic UUID */
+
+#define NO_CONN_HANDLE 0xFFFF
+
+// Function declarations
+static int gap_event(struct ble_gap_event *event, void *arg);
+static int service_gatt_handler(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt, void *arg);
+
+static uint8_t addr_type;
+static uint16_t chrval_handle;
+static uint16_t active_conn_handle = NO_CONN_HANDLE; // Accessed outside the notify function
+
+// For random static address, 2 MSB bits of the first byte shall be 0b11.
+// I.e. addr[5] shall be in the range of 0xC0 to 0xFF
+static const uint8_t server_addr[] = {0x01, 0x02, 0x03, 0x04, 0x05, 0xC0};
+static const uint8_t client_addr[] = {0x10, 0x20, 0x30, 0x40, 0x50, 0xC0};
+
+// Services
+static const ble_uuid16_t svc_uuid = BLE_UUID16_INIT(BLE_SVC_UUID16);
+static const ble_uuid16_t chr_uuid = BLE_UUID16_INIT(BLE_SVC_CHR_UUID16);
+static const struct ble_gatt_svc_def ble_svc_gatt_defs[] = {
+    {
+        /* The Service */
+        .type = BLE_GATT_SVC_TYPE_PRIMARY,
+        .uuid = &svc_uuid.u,
+        .includes = NULL,
+        .characteristics = (struct ble_gatt_chr_def[]){
+            {
+                /* The characteristic */
+                .uuid = &chr_uuid.u,
+                .access_cb = service_gatt_handler,
+                .arg = NULL,
+                .descriptors = NULL,
+                .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_ENC | BLE_GATT_CHR_F_WRITE_AUTHEN |
+                         BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_NOTIFY_INDICATE_ENC | BLE_GATT_CHR_F_NOTIFY_INDICATE_AUTHEN,
+                .min_key_size = 0,
+                .val_handle = &chrval_handle,
+                .cpfd = NULL,
+            },
+            {
+                /* No more characteristics */
+            },
+        },
+    },
+    {
+        /* No more services. */
+    },
+};
+
+// Logs information about a connection to the console.
+static void print_conn_desc(const struct ble_gap_conn_desc *desc)
+{
+    char addr[18];
+
+    sprintf(addr, "%02x:%02x:%02x:%02x:%02x:%02x", desc->our_id_addr.val[5], desc->our_id_addr.val[4],
+            desc->our_id_addr.val[3], desc->our_id_addr.val[2], desc->our_id_addr.val[1], desc->our_id_addr.val[0]);
+    ESP_LOGI(TAG, " our_id_addr_type=%d our_id_addr=%s", desc->our_id_addr.type, addr);
+
+    sprintf(addr, "%02x:%02x:%02x:%02x:%02x:%02x", desc->peer_id_addr.val[5], desc->peer_id_addr.val[4],
+            desc->peer_id_addr.val[3], desc->peer_id_addr.val[2], desc->peer_id_addr.val[1], desc->peer_id_addr.val[0]);
+    ESP_LOGI(TAG, " peer_id_addr_type=%d peer_id_addr=%s", desc->peer_id_addr.type, addr);
+
+    ESP_LOGI(TAG, " conn_itvl=%d conn_latency=%d supervision_timeout=%d encrypted=%d authenticated=%d bonded=%d\n",
+             desc->conn_itvl, desc->conn_latency, desc->supervision_timeout, desc->sec_state.encrypted,
+             desc->sec_state.authenticated, desc->sec_state.bonded);
+}
+
+static void advertise(void)
+{
+    struct ble_hs_adv_fields fields = {};
+    const char *name = ble_svc_gap_device_name();
+
+    // General discoverability and BLE-only (BR/EDR unsupported)
+    fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
+
+    /* Set device name */
+    fields.name = (uint8_t *)name;
+    fields.name_len = strlen(name);
+    fields.name_is_complete = 1;
+
+    /* Set device tx power */
+    fields.tx_pwr_lvl = BLE_HS_ADV_TX_PWR_LVL_AUTO;
+    fields.tx_pwr_lvl_is_present = 1;
+
+    /* 16-bit service UUIDs (alert notifications) */
+    fields.uuids16 = (ble_uuid16_t[]){BLE_UUID16_INIT(BLE_SVC_UUID16)};
+    fields.uuids16_is_complete = 1;
+    fields.num_uuids16 = 1;
+
+    /* Set device LE role */
+    fields.le_role = BLE_GAP_ROLE_SLAVE;
+    fields.le_role_is_present = 1;
+
+    int status = ble_gap_adv_set_fields(&fields);
+    if (status == 0)
+    {
+        struct ble_gap_adv_params adv_params = {};
+
+        /* Set connetable and general discoverable mode */
+        adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;
+        adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN;
+        // TODO -> Activate this later on
+        // adv_params.filter_policy = BLE_HCI_ADV_FILT_BOTH;
+        adv_params.filter_policy = BLE_HCI_ADV_FILT_NONE;
+
+        /* Start advertising */
+        status = ble_gap_adv_start(addr_type, NULL, BLE_HS_FOREVER, &adv_params, gap_event, NULL);
+        if (status == 0)
+        {
+            ESP_LOGI(TAG, "Advertising started!");
+        }
+        else
+        {
+            ESP_LOGE(TAG, "Failed to start advertising, error code: %d", status);
+        }
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Error setting advertisement data; status = %d\n", status);
+    }
+}
+
+static int gap_event(struct ble_gap_event *event, void *)
+{
+    int status = 0;
+    struct ble_gap_conn_desc desc;
+
+    switch (event->type)
+    {
+    case BLE_GAP_EVENT_CONNECT: /* A new connection was established or a connection attempt failed. */
+        ESP_LOGI(TAG, "connection %s; status=%d ", event->connect.status == 0 ? "established" : "failed", event->connect.status);
+        if (event->connect.status == 0)
+        {
+            // Save current connection handle
+            active_conn_handle = event->connect.conn_handle;
+
+            assert(0 == ble_gap_conn_find(event->connect.conn_handle, &desc));
+            print_conn_desc(&desc);
+        }
+        else
+        {
+            /* Connection failed; resume advertising. */
+            advertise();
+        }
+        break;
+
+    case BLE_GAP_EVENT_DISCONNECT:
+        ESP_LOGI(TAG, "disconnect; reason=%d ", event->disconnect.reason);
+
+        // Clear handle on disconnect
+        active_conn_handle = NO_CONN_HANDLE;
+
+        print_conn_desc(&event->disconnect.conn);
+        advertise(); /* Connection terminated; resume advertising. */
+        break;
+
+    case BLE_GAP_EVENT_CONN_UPDATE: /* The central has updated the connection parameters. */
+        ESP_LOGI(TAG, "connection updated; status=%d ", event->conn_update.status);
+        assert(0 == ble_gap_conn_find(event->conn_update.conn_handle, &desc));
+        print_conn_desc(&desc);
+        break;
+
+    case BLE_GAP_EVENT_ADV_COMPLETE:
+        ESP_LOGI(TAG, "advertise complete; reason=%d", event->adv_complete.reason);
+        advertise();
+        break;
+
+    case BLE_GAP_EVENT_SUBSCRIBE:
+        ESP_LOGI(TAG, "Subscribe event; conn_handle=%d attr_handle=%d  reason=%d prevn=%d curn=%d previ=%d curi=%d\n",
+                 event->subscribe.conn_handle, event->subscribe.attr_handle, event->subscribe.reason, event->subscribe.prev_notify,
+                 event->subscribe.cur_notify, event->subscribe.prev_indicate, event->subscribe.cur_indicate);
+        break;
+
+    case BLE_GAP_EVENT_REPEAT_PAIRING:                                            /* Repeat pairing event */
+        assert(0 == ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc)); /* Get connection descriptor */
+        assert(0 == ble_store_util_delete_peer(&desc.peer_id_addr));              /* Delete the old bond */
+
+        ESP_LOGI(TAG, "Repairing...");
+        status = BLE_GAP_REPEAT_PAIRING_RETRY; // Return BLE_GAP_REPEAT_PAIRING_RETRY to indicate that
+                                               // the host should continue with pairing operation
+        break;
+
+    case BLE_GAP_EVENT_ENC_CHANGE: /* Encryption change event: Encryption has been enabled or disabled for this connection. */
+        if (event->enc_change.status == 0)
+        {
+            ESP_LOGI(TAG, "connection encrypted!");
+        }
+        else
+        {
+            ESP_LOGE(TAG, "connection encryption failed, status: %d", event->enc_change.status);
+        }
+        break;
+
+    case BLE_GAP_EVENT_PASSKEY_ACTION:
+    {
+        ESP_LOGI(TAG, "Passkey Action. Action Type: %d", event->passkey.params.action);
+
+        struct ble_sm_io pkey = {};
+        pkey.action = event->passkey.params.action;
+
+        // If the central expects us to display a passkey, we inject our static one
+        if (pkey.action == BLE_SM_IOACT_DISP)
+        {
+            pkey.passkey = PASSKEY;
+            ble_sm_inject_io(event->passkey.conn_handle, &pkey);
+        }
+        break;
+    }
+
+    default:
+        break;
+    }
+
+    return status;
+}
+
+static void on_reset(int reason)
+{
+    ESP_LOGE(TAG, "Resetting state; reason=%d\n", reason);
+}
+
+static void on_sync(void)
+{
+    assert(0 == ble_hs_id_set_rnd(server_addr)); // Set random static address; BLE_ADDR_RANDOM
+
+    assert(0 == ble_hs_util_ensure_addr(0));
+
+    /* Figure out address type to use while advertising */
+    assert(0 == ble_hs_id_infer_auto(0, &addr_type));
+
+    uint8_t addr_val[6] = {0};
+    assert(0 == ble_hs_id_copy_addr(addr_type, addr_val, NULL));
+
+    printf("BLE Device Address: %02X:%02X:%02X:%02X:%02X:%02X\n",
+           addr_val[5], addr_val[4], addr_val[3], addr_val[2], addr_val[1], addr_val[0]);
+
+    ble_addr_t client = {};
+    client.type = BLE_ADDR_RANDOM;
+    memcpy(client.val, client_addr, sizeof(client_addr));
+
+    assert(0 == ble_gap_wl_set(&client, 1));
+
+    /* Begin advertising. */
+    advertise();
+}
+
+/* Callback function for custom service */
+static int service_gatt_handler(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt, void *)
+{
+    switch (ctxt->op)
+    {
+    case BLE_GATT_ACCESS_OP_READ_CHR:
+        ESP_LOGI(TAG, "Callback for read");
+        break;
+
+    case BLE_GATT_ACCESS_OP_WRITE_CHR:
+    {
+        ESP_LOGI(TAG, "Data received in write event, conn_handle = %x, attr_handle = %x", conn_handle, attr_handle);
+    }
+    break;
+
+    default:
+        ESP_LOGI(TAG, "\nDefault Callback");
+        break;
+    }
+
+    return 0;
+}
+
+static void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *)
+{
+    char buf[BLE_UUID_STR_LEN] = {0};
+
+    switch (ctxt->op)
+    {
+    case BLE_GATT_REGISTER_OP_SVC:
+        ESP_LOGI(TAG, "registered service %s with handle=%d\n", ble_uuid_to_str(ctxt->svc.svc_def->uuid, buf), ctxt->svc.handle);
+        break;
+
+    case BLE_GATT_REGISTER_OP_CHR:
+        ESP_LOGI(TAG, "registering characteristic %s with def_handle=%d val_handle=%d\n",
+                 ble_uuid_to_str(ctxt->chr.chr_def->uuid, buf), ctxt->chr.def_handle, ctxt->chr.val_handle);
+        break;
+
+    case BLE_GATT_REGISTER_OP_DSC:
+        ESP_LOGI(TAG, "registering descriptor %s with handle=%d\n", ble_uuid_to_str(ctxt->dsc.dsc_def->uuid, buf), ctxt->dsc.handle);
+        break;
+
+    default:
+        assert(0);
+        break;
+    }
+}
+
+static int gatt_svr_init(void)
+{
+    ble_svc_gap_init();
+    ble_svc_gatt_init();
+
+    int status = ble_gatts_count_cfg(ble_svc_gatt_defs);
+
+    if (status == 0)
+    {
+        status = ble_gatts_add_svcs(ble_svc_gatt_defs);
+    }
+
+    return status;
+}
+
+// Task to make BLE non-blocking
+static void ble_host_task(void *param)
+{
+    ESP_LOGI(TAG, "BLE Host Task Started");
+    nimble_port_run();
+    nimble_port_freertos_deinit();
+}
+
 extern "C" void app_main(void)
 {
     // Exclude the Idle Task from the Task WDT
@@ -39,9 +362,6 @@ extern "C" void app_main(void)
     ESP_ERROR_CHECK(gpio_reset_pin(GPIO_NUM_4));
     ESP_ERROR_CHECK(gpio_set_direction(GPIO_NUM_4, GPIO_MODE_OUTPUT)); // Configure pin 4 as a digital output pin
     uint32_t led_state = 0;
-
-    int64_t interval_us = Setting::INTERVAL;
-    (void)interval_us;
 
     // ** For UART **
     QueueHandle_t queue;
@@ -67,6 +387,41 @@ extern "C" void app_main(void)
     uart_event_t event;
     uint8_t buffer[BUF_SIZE];
 
+    // ** For BLE **
+    esp_err_t status = nvs_flash_init();
+    if (status == ESP_ERR_NVS_NO_FREE_PAGES || status == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        status = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(status);
+
+    ESP_ERROR_CHECK(nimble_port_init());
+    ESP_ERROR_CHECK(esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P20));
+
+    /* Initialize the NimBLE host configuration. */
+    ble_hs_cfg.sync_cb = on_sync;
+    ble_hs_cfg.reset_cb = on_reset;
+    ble_hs_cfg.gatts_register_cb = gatt_svr_register_cb;
+    ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
+
+    /* Security manager configuration */
+    ble_hs_cfg.sm_sc = 1;      // Secure Connections
+    ble_hs_cfg.sm_mitm = 1;    // MITM protection = required for passkey
+    ble_hs_cfg.sm_bonding = 1; // Enable bonding
+    ble_hs_cfg.sm_io_cap = BLE_HS_IO_DISPLAY_ONLY;
+    ble_hs_cfg.sm_our_key_dist |= BLE_SM_PAIR_KEY_DIST_ENC;
+    ble_hs_cfg.sm_their_key_dist |= BLE_SM_PAIR_KEY_DIST_ENC;
+
+    /* Register custom service */
+    assert(0 == gatt_svr_init());
+
+    /* Set the default device name. */
+    assert(0 == ble_svc_gap_device_name_set(TAG));
+
+    // Start the BLE task as a separate non-blocking task
+    nimble_port_freertos_init(ble_host_task);
+
     while (1)
     {
         // Read UART
@@ -87,7 +442,18 @@ extern "C" void app_main(void)
                     led_state = !led_state;
                     ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, led_state));
 
-                    // TODO -> Send data over BLE
+                    if (active_conn_handle != NO_CONN_HANDLE)
+                    {
+                        struct os_mbuf *txom = ble_hs_mbuf_from_flat(buffer, sizeof(buffer));
+                        if (0 == ble_gatts_notify_custom(active_conn_handle, chrval_handle, txom))
+                        {
+                            ESP_LOGI(TAG, "Notification sent successfully");
+                        }
+                        else
+                        {
+                            ESP_LOGE(TAG, "Error in sending notification");
+                        }
+                    }
                 }
                 else
                 {
