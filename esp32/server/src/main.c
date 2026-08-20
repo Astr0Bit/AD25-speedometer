@@ -2,21 +2,19 @@
 #include "setting.h"
 #include "esp_log.h"
 #include <stdbool.h>
+#include <esp_timer.h>
 #include "nvs_flash.h"
 #include "nimble/ble.h"
 #include "host/ble_hs.h"
 #include "host/ble_sm.h"
 #include "driver/uart.h"
+#include <driver/gpio.h>
+#include <esp_task_wdt.h>
 #include "host/util/util.h"
 #include "nimble/nimble_port.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 #include "nimble/nimble_port_freertos.h"
-
-// #include <stdio.h>
-#include <esp_timer.h>
-#include <driver/gpio.h>
-#include <esp_task_wdt.h>
 
 // * Tag for logging
 static const char *TAG = "SERVER";
@@ -25,7 +23,7 @@ static const char *TAG = "SERVER";
 #define UART UART_NUM_0 // USB UART
 #define TX_PIN GPIO_NUM_16
 #define RX_PIN GPIO_NUM_17
-#define BUF_SIZE (2 * SOC_UART_FIFO_LEN)
+#define UART_BUF_SIZE (2 * SOC_UART_FIFO_LEN)
 #define QUEUE_SIZE 8
 #define TX_MSG_LEN SBUFLEN
 #define RX_MSG_LEN SBUFLEN
@@ -475,7 +473,7 @@ void app_main(void)
     config.source_clk = UART_SCLK_DEFAULT;
 
     // Install driver and configure UART
-    ESP_ERROR_CHECK(uart_driver_install(UART, BUF_SIZE, BUF_SIZE, QUEUE_SIZE, &queue, 0));
+    ESP_ERROR_CHECK(uart_driver_install(UART, UART_BUF_SIZE, UART_BUF_SIZE, QUEUE_SIZE, &queue, 0));
     ESP_ERROR_CHECK(uart_param_config(UART, &config));
     ESP_ERROR_CHECK(uart_set_pin(UART, TX_PIN, RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 
@@ -483,7 +481,7 @@ void app_main(void)
 
     // * To store received event
     uart_event_t event;
-    uint8_t buffer[BUF_SIZE];
+    uint8_t buffer[SBUFLEN];
 
     // ** For BLE **
     ble_err_t ble_status = ble_setup();
@@ -521,7 +519,7 @@ void app_main(void)
             if (pdTRUE == xQueueReceive(queue, (void *)&event, UART_TIMEOUT_MS))
             {
                 // Clear the buffer
-                bzero(buffer, BUF_SIZE);
+                bzero(buffer, SBUFLEN);
 
                 // Handle events
                 switch (event.type)
