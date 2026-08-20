@@ -30,9 +30,10 @@ static const char *TAG = "SERVER";
 #define TX_MSG_LEN SBUFLEN
 #define RX_MSG_LEN SBUFLEN
 
-// Configure BLE
-#define PASSKEY 123456
+// Configure LED
+#define LED_PIN GPIO_NUM_4
 
+// Configure BLE
 // TODO -> These should later be 128 bit
 #define BLE_SVC_UUID16 0xABC0     /* 16 Bit Service UUID */
 #define BLE_SVC_CHR_UUID16 0xABC1 /* 16 Bit Service Characteristic UUID */
@@ -50,12 +51,12 @@ static uint16_t active_conn_handle = NO_CONN_HANDLE; // Accessed outside the not
 
 // For random static address, 2 MSB bits of the first byte shall be 0b11.
 // I.e. addr[5] shall be in the range of 0xC0 to 0xFF
-static const uint8_t server_addr[] = {0x01, 0x02, 0x03, 0x04, 0x05, 0xC0};
-static const uint8_t client_addr[] = {0x10, 0x20, 0x30, 0x40, 0x50, 0xC0};
+static const uint8_t server_addr[] = SERVER_ADDR;
+static const uint8_t client_addr[] = CLIENT_ADDR;
 
 // Services
-static const ble_uuid16_t svc_uuid = BLE_UUID16_INIT(BLE_SVC_UUID16);
-static const ble_uuid16_t chr_uuid = BLE_UUID16_INIT(BLE_SVC_CHR_UUID16);
+static const ble_uuid128_t svc_uuid = BLE_UUID128_INIT(GATT_SVC_UUID);
+static const ble_uuid128_t chr_uuid = BLE_UUID128_INIT(GATT_CHR_UUID);
 static const struct ble_gatt_svc_def ble_svc_gatt_defs[] = {
     {
         /* The Service */
@@ -412,9 +413,9 @@ void ble_err_strobe()
 
     for (int i = 0; i < N_STROBES; i++)
     {
-        ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 1));
+        ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 1));
         vTaskDelay(pdMS_TO_TICKS(STROBE_SHORT_MS));
-        ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 0));
+        ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 0));
         vTaskDelay(pdMS_TO_TICKS(STROBE_LONG_MS));
     }
     vTaskDelay(pdMS_TO_TICKS(STROBE_PAUSE_MS));
@@ -425,23 +426,23 @@ void ble_err_heartbeat()
     static const int BEAT_MS = 100;
     static const int BEAT_PAUSE_MS = 700;
 
-    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 1));
+    ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 1));
     vTaskDelay(pdMS_TO_TICKS(BEAT_MS));
-    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 0));
+    ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 0));
     vTaskDelay(pdMS_TO_TICKS(BEAT_MS));
-    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 1));
+    ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 1));
     vTaskDelay(pdMS_TO_TICKS(BEAT_MS));
 
-    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 0));
+    ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 0));
     vTaskDelay(pdMS_TO_TICKS(BEAT_PAUSE_MS)); // Pause before repeating sequence
 }
 
 void ble_err_success()
 {
     static const int SUCCESS_PAUSE_MS = 2000;
-    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 1));
+    ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 1));
     vTaskDelay(pdMS_TO_TICKS(SUCCESS_PAUSE_MS));
-    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 0));
+    ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 0));
 }
 
 void app_main(void)
@@ -449,8 +450,8 @@ void app_main(void)
     // Exclude the Idle Task from the Task WDT
     ESP_ERROR_CHECK(esp_task_wdt_delete(xTaskGetIdleTaskHandle()));
 
-    ESP_ERROR_CHECK(gpio_reset_pin(GPIO_NUM_4));
-    ESP_ERROR_CHECK(gpio_set_direction(GPIO_NUM_4, GPIO_MODE_OUTPUT)); // Configure pin 4 as a digital output pin
+    ESP_ERROR_CHECK(gpio_reset_pin(LED_PIN));
+    ESP_ERROR_CHECK(gpio_set_direction(LED_PIN, GPIO_MODE_OUTPUT)); // Configure pin 4 as a digital output pin
     uint32_t led_state = 0;
 
     // ** For UART **
@@ -527,7 +528,7 @@ void app_main(void)
                         if (0 == ble_gatts_notify_custom(active_conn_handle, chrval_handle, txom))
                         {
                             led_state = !led_state;
-                            ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, led_state));
+                            ESP_ERROR_CHECK(gpio_set_level(LED_PIN, led_state));
                             ESP_LOGI(TAG, "Notification sent successfully");
                         }
                         else
@@ -575,11 +576,11 @@ void app_main(void)
             }
             else
             {
-                ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 0));
+                ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 0));
             }
         }
 
         // Turn of LED if not connected to BLE client
-        ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 0));
+        ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 0));
     }
 }
