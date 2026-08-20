@@ -344,12 +344,12 @@ static int gatt_svr_init(void)
     return status;
 }
 
-enum class ble_err_t
+typedef enum
 {
     BLE_OK = 0,
     BLE_ERR_GATT_SVR_INIT,
     BLE_ERR_BLE_SVC_GAP_DEV_NAME,
-};
+} ble_err_t;
 
 static ble_err_t ble_setup()
 {
@@ -381,16 +381,16 @@ static ble_err_t ble_setup()
     /* Register custom service */
     if (0 != gatt_svr_init())
     {
-        return ble_err_t::BLE_ERR_GATT_SVR_INIT;
+        return BLE_ERR_GATT_SVR_INIT;
     }
 
     /* Set the default device name. */
     if (0 != ble_svc_gap_device_name_set(TAG))
     {
-        return ble_err_t::BLE_ERR_BLE_SVC_GAP_DEV_NAME;
+        return BLE_ERR_BLE_SVC_GAP_DEV_NAME;
     }
 
-    return ble_err_t::BLE_OK;
+    return BLE_OK;
 }
 
 // Task to make BLE non-blocking
@@ -404,10 +404,10 @@ static void ble_host_task(void *param)
 // Blinking patterns for BLE error codes
 void ble_err_strobe()
 {
-    static constexpr int N_STROBES = 6;
-    static constexpr int STROBE_SHORT_MS = 50;
-    static constexpr int STROBE_LONG_MS = 150;
-    static constexpr int STROBE_PAUSE_MS = 800;
+    static const int N_STROBES = 6;
+    static const int STROBE_SHORT_MS = 50;
+    static const int STROBE_LONG_MS = 150;
+    static const int STROBE_PAUSE_MS = 800;
 
     for (int i = 0; i < N_STROBES; i++)
     {
@@ -421,8 +421,8 @@ void ble_err_strobe()
 
 void ble_err_heartbeat()
 {
-    static constexpr int BEAT_MS = 100;
-    static constexpr int BEAT_PAUSE_MS = 700;
+    static const int BEAT_MS = 100;
+    static const int BEAT_PAUSE_MS = 700;
 
     ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 1));
     vTaskDelay(pdMS_TO_TICKS(BEAT_MS));
@@ -437,13 +437,13 @@ void ble_err_heartbeat()
 
 void ble_err_success()
 {
-    static constexpr int SUCCESS_PAUSE_MS = 2000;
+    static const int SUCCESS_PAUSE_MS = 2000;
     ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 1));
     vTaskDelay(pdMS_TO_TICKS(SUCCESS_PAUSE_MS));
     ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 0));
 }
 
-extern "C" void app_main(void)
+void app_main(void)
 {
     // Exclude the Idle Task from the Task WDT
     ESP_ERROR_CHECK(esp_task_wdt_delete(xTaskGetIdleTaskHandle()));
@@ -478,22 +478,22 @@ extern "C" void app_main(void)
 
     // ** For BLE **
     ble_err_t ble_status = ble_setup();
-    // ble_status = ble_err_t::BLE_ERR_GATT_SVR_INIT; // Just for testing different error codes
-    bool run_seq{true};
+    // ble_status = BLE_ERR_GATT_SVR_INIT; // Just for testing different error codes
+    bool run_seq = true;
     while (run_seq)
     {
         // Blink LED in an error sequence
         switch (ble_status)
         {
-        case ble_err_t::BLE_ERR_GATT_SVR_INIT:
+        case BLE_ERR_GATT_SVR_INIT:
             ble_err_strobe();
             break;
 
-        case ble_err_t::BLE_ERR_BLE_SVC_GAP_DEV_NAME:
+        case BLE_ERR_BLE_SVC_GAP_DEV_NAME:
             ble_err_heartbeat();
             break;
 
-        case ble_err_t::BLE_OK:
+        case BLE_OK:
             ble_err_success();
             run_seq = false; // Exit loop
             break;
@@ -503,30 +503,30 @@ extern "C" void app_main(void)
     // Start the BLE task as a separate non-blocking task
     nimble_port_freertos_init(ble_host_task);
 
-    while (1)
+    while (true)
     {
-        // Read UART
-        if (pdTRUE == xQueueReceive(queue, (void *)&event, 1))
+        // Whilst connected to BLE client
+        while (active_conn_handle != NO_CONN_HANDLE)
         {
-            // Clear the buffer
-            bzero(buffer, BUF_SIZE);
+            // Read UART
+            if (pdTRUE == xQueueReceive(queue, (void *)&event, 1))
+            {
+                // Clear the buffer
+                bzero(buffer, BUF_SIZE);
 
-            // Handle events
-            switch (event.type)
-            {
-            case UART_DATA:
-            {
-                int len = uart_read_bytes(UART, buffer, event.size, portMAX_DELAY);
-                if (len == RX_MSG_LEN)
+                // Handle events
+                switch (event.type)
                 {
-                    led_state = !led_state;
-                    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, led_state));
-
-                    if (active_conn_handle != NO_CONN_HANDLE)
+                case UART_DATA:
+                {
+                    int len = uart_read_bytes(UART, buffer, event.size, portMAX_DELAY);
+                    if (len == RX_MSG_LEN)
                     {
                         struct os_mbuf *txom = ble_hs_mbuf_from_flat(buffer, sizeof(buffer));
                         if (0 == ble_gatts_notify_custom(active_conn_handle, chrval_handle, txom))
                         {
+                            led_state = !led_state;
+                            ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, led_state));
                             ESP_LOGI(TAG, "Notification sent successfully");
                         }
                         else
@@ -534,44 +534,47 @@ extern "C" void app_main(void)
                             ESP_LOGE(TAG, "Error in sending notification");
                         }
                     }
+                    else
+                    {
+                        ESP_LOGE(TAG, "Packet misaligned. Read %d bytes, expected %d", len, RX_MSG_LEN);
+                    }
+                    break;
                 }
-                else
-                {
-                    ESP_LOGE(TAG, "Packet misaligned. Read %d bytes, expected %d", len, RX_MSG_LEN);
+
+                case UART_FIFO_OVF: /* Event of HW FIFO overflow detected */
+                    ESP_LOGI(TAG, "Hardware FIFO overflow");
+                    // If fifo overflow happened, you should consider adding flow control for your application.
+                    uart_flush_input(UART);
+                    xQueueReset(queue);
+                    break;
+
+                case UART_BUFFER_FULL: /* Event of UART ring buffer full */
+                    ESP_LOGI(TAG, "Ring buffer full");
+                    // If buffer full happened, you should consider increasing your buffer size
+                    uart_flush_input(UART);
+                    xQueueReset(queue);
+                    break;
+
+                case UART_BREAK: /* Event of UART RX break detected */
+                    ESP_LOGI(TAG, "UART rx break");
+                    break;
+
+                case UART_PARITY_ERR: /* Event of UART parity check error */
+                    ESP_LOGI(TAG, "UART parity error");
+                    break;
+
+                case UART_FRAME_ERR: /* Event of UART frame error */
+                    ESP_LOGI(TAG, "UART frame error");
+                    break;
+
+                default: /* Others */
+                    ESP_LOGI(TAG, "UART event type: %d", event.type);
+                    break;
                 }
-                break;
-            }
-
-            case UART_FIFO_OVF: /* Event of HW FIFO overflow detected */
-                ESP_LOGI(TAG, "Hardware FIFO overflow");
-                // If fifo overflow happened, you should consider adding flow control for your application.
-                uart_flush_input(UART);
-                xQueueReset(queue);
-                break;
-
-            case UART_BUFFER_FULL: /* Event of UART ring buffer full */
-                ESP_LOGI(TAG, "Ring buffer full");
-                // If buffer full happened, you should consider increasing your buffer size
-                uart_flush_input(UART);
-                xQueueReset(queue);
-                break;
-
-            case UART_BREAK: /* Event of UART RX break detected */
-                ESP_LOGI(TAG, "UART rx break");
-                break;
-
-            case UART_PARITY_ERR: /* Event of UART parity check error */
-                ESP_LOGI(TAG, "UART parity error");
-                break;
-
-            case UART_FRAME_ERR: /* Event of UART frame error */
-                ESP_LOGI(TAG, "UART frame error");
-                break;
-
-            default: /* Others */
-                ESP_LOGI(TAG, "UART event type: %d", event.type);
-                break;
             }
         }
+
+        // Turn of LED if not connected to BLE client
+        ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 0));
     }
 }
