@@ -37,6 +37,7 @@ static const char *TAG = "SERVER";
 #define BLE_SVC_UUID16 0xABC0     /* 16 Bit Service UUID */
 #define BLE_SVC_CHR_UUID16 0xABC1 /* 16 Bit Service Characteristic UUID */
 
+#define UART_TIMEOUT_MS 100
 #define NO_CONN_HANDLE 0xFFFF // When there is no active connection handle
 
 // Function declarations
@@ -509,7 +510,7 @@ void app_main(void)
         while (active_conn_handle != NO_CONN_HANDLE)
         {
             // Read UART
-            if (pdTRUE == xQueueReceive(queue, (void *)&event, 1))
+            if (pdTRUE == xQueueReceive(queue, (void *)&event, UART_TIMEOUT_MS))
             {
                 // Clear the buffer
                 bzero(buffer, BUF_SIZE);
@@ -571,6 +572,10 @@ void app_main(void)
                     ESP_LOGI(TAG, "UART event type: %d", event.type);
                     break;
                 }
+            }
+            else
+            {
+                ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 0));
             }
         }
 
