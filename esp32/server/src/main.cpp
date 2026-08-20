@@ -13,8 +13,7 @@
 #include "services/gatt/ble_svc_gatt.h"
 #include "nimble/nimble_port_freertos.h"
 
-// * Just for testing
-#include <stdio.h>
+// #include <stdio.h>
 #include <esp_timer.h>
 #include <driver/gpio.h>
 #include <esp_task_wdt.h>
@@ -38,7 +37,7 @@ static const char *TAG = "SERVER";
 #define BLE_SVC_UUID16 0xABC0     /* 16 Bit Service UUID */
 #define BLE_SVC_CHR_UUID16 0xABC1 /* 16 Bit Service Characteristic UUID */
 
-#define NO_CONN_HANDLE 0xFFFF
+#define NO_CONN_HANDLE 0xFFFF // When there is no active connection handle
 
 // Function declarations
 static int gap_event(struct ble_gap_event *event, void *arg);
@@ -345,6 +344,55 @@ static int gatt_svr_init(void)
     return status;
 }
 
+enum class ble_err_t
+{
+    BLE_OK = 0,
+    BLE_ERR_GATT_SVR_INIT,
+    BLE_ERR_BLE_SVC_GAP_DEV_NAME,
+};
+
+static ble_err_t ble_setup()
+{
+    esp_err_t status = nvs_flash_init();
+    if (status == ESP_ERR_NVS_NO_FREE_PAGES || status == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        status = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(status);
+
+    ESP_ERROR_CHECK(nimble_port_init());
+    ESP_ERROR_CHECK(esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P20));
+
+    /* Initialize the NimBLE host configuration. */
+    ble_hs_cfg.sync_cb = on_sync;
+    ble_hs_cfg.reset_cb = on_reset;
+    ble_hs_cfg.gatts_register_cb = gatt_svr_register_cb;
+    ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
+
+    /* Security manager configuration */
+    ble_hs_cfg.sm_sc = 1;      // Secure Connections
+    ble_hs_cfg.sm_mitm = 1;    // MITM protection = required for passkey
+    ble_hs_cfg.sm_bonding = 1; // Enable bonding
+    ble_hs_cfg.sm_io_cap = BLE_HS_IO_DISPLAY_ONLY;
+    ble_hs_cfg.sm_our_key_dist |= BLE_SM_PAIR_KEY_DIST_ENC;
+    ble_hs_cfg.sm_their_key_dist |= BLE_SM_PAIR_KEY_DIST_ENC;
+
+    /* Register custom service */
+    if (0 != gatt_svr_init())
+    {
+        return ble_err_t::BLE_ERR_GATT_SVR_INIT;
+    }
+
+    /* Set the default device name. */
+    if (0 != ble_svc_gap_device_name_set(TAG))
+    {
+        return ble_err_t::BLE_ERR_BLE_SVC_GAP_DEV_NAME;
+    }
+
+    return ble_err_t::BLE_OK;
+}
+
 // Task to make BLE non-blocking
 static void ble_host_task(void *param)
 {
@@ -353,12 +401,53 @@ static void ble_host_task(void *param)
     nimble_port_freertos_deinit();
 }
 
+// Blinking patterns for BLE error codes
+void ble_err_strobe()
+{
+    static constexpr int N_STROBES = 6;
+    static constexpr int STROBE_SHORT_MS = 50;
+    static constexpr int STROBE_LONG_MS = 150;
+    static constexpr int STROBE_PAUSE_MS = 800;
+
+    for (int i = 0; i < N_STROBES; i++)
+    {
+        ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 1));
+        vTaskDelay(pdMS_TO_TICKS(STROBE_SHORT_MS));
+        ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 0));
+        vTaskDelay(pdMS_TO_TICKS(STROBE_LONG_MS));
+    }
+    vTaskDelay(pdMS_TO_TICKS(STROBE_PAUSE_MS));
+}
+
+void ble_err_heartbeat()
+{
+    static constexpr int BEAT_MS = 100;
+    static constexpr int BEAT_PAUSE_MS = 700;
+
+    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 1));
+    vTaskDelay(pdMS_TO_TICKS(BEAT_MS));
+    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 0));
+    vTaskDelay(pdMS_TO_TICKS(BEAT_MS));
+    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 1));
+    vTaskDelay(pdMS_TO_TICKS(BEAT_MS));
+
+    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 0));
+    vTaskDelay(pdMS_TO_TICKS(BEAT_PAUSE_MS)); // Pause before repeating sequence
+}
+
+void ble_err_success()
+{
+    static constexpr int SUCCESS_PAUSE_MS = 2000;
+    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 1));
+    vTaskDelay(pdMS_TO_TICKS(SUCCESS_PAUSE_MS));
+    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 0));
+}
+
 extern "C" void app_main(void)
 {
     // Exclude the Idle Task from the Task WDT
     ESP_ERROR_CHECK(esp_task_wdt_delete(xTaskGetIdleTaskHandle()));
 
-    // ! TO BE REMOVED
     ESP_ERROR_CHECK(gpio_reset_pin(GPIO_NUM_4));
     ESP_ERROR_CHECK(gpio_set_direction(GPIO_NUM_4, GPIO_MODE_OUTPUT)); // Configure pin 4 as a digital output pin
     uint32_t led_state = 0;
@@ -388,36 +477,28 @@ extern "C" void app_main(void)
     uint8_t buffer[BUF_SIZE];
 
     // ** For BLE **
-    esp_err_t status = nvs_flash_init();
-    if (status == ESP_ERR_NVS_NO_FREE_PAGES || status == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    ble_err_t ble_status = ble_setup();
+    // ble_status = ble_err_t::BLE_ERR_GATT_SVR_INIT; // Just for testing different error codes
+    bool run_seq{true};
+    while (run_seq)
     {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        status = nvs_flash_init();
+        // Blink LED in an error sequence
+        switch (ble_status)
+        {
+        case ble_err_t::BLE_ERR_GATT_SVR_INIT:
+            ble_err_strobe();
+            break;
+
+        case ble_err_t::BLE_ERR_BLE_SVC_GAP_DEV_NAME:
+            ble_err_heartbeat();
+            break;
+
+        case ble_err_t::BLE_OK:
+            ble_err_success();
+            run_seq = false; // Exit loop
+            break;
+        }
     }
-    ESP_ERROR_CHECK(status);
-
-    ESP_ERROR_CHECK(nimble_port_init());
-    ESP_ERROR_CHECK(esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P20));
-
-    /* Initialize the NimBLE host configuration. */
-    ble_hs_cfg.sync_cb = on_sync;
-    ble_hs_cfg.reset_cb = on_reset;
-    ble_hs_cfg.gatts_register_cb = gatt_svr_register_cb;
-    ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
-
-    /* Security manager configuration */
-    ble_hs_cfg.sm_sc = 1;      // Secure Connections
-    ble_hs_cfg.sm_mitm = 1;    // MITM protection = required for passkey
-    ble_hs_cfg.sm_bonding = 1; // Enable bonding
-    ble_hs_cfg.sm_io_cap = BLE_HS_IO_DISPLAY_ONLY;
-    ble_hs_cfg.sm_our_key_dist |= BLE_SM_PAIR_KEY_DIST_ENC;
-    ble_hs_cfg.sm_their_key_dist |= BLE_SM_PAIR_KEY_DIST_ENC;
-
-    /* Register custom service */
-    assert(0 == gatt_svr_init());
-
-    /* Set the default device name. */
-    assert(0 == ble_svc_gap_device_name_set(TAG));
 
     // Start the BLE task as a separate non-blocking task
     nimble_port_freertos_init(ble_host_task);
@@ -438,7 +519,6 @@ extern "C" void app_main(void)
                 int len = uart_read_bytes(UART, buffer, event.size, portMAX_DELAY);
                 if (len == RX_MSG_LEN)
                 {
-                    // ! TO BE REMOVED
                     led_state = !led_state;
                     ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, led_state));
 
