@@ -29,16 +29,12 @@ static const char *TAG = "SERVER";
 #define QUEUE_SIZE 8
 #define TX_MSG_LEN SBUFLEN
 #define RX_MSG_LEN SBUFLEN
+#define UART_TIMEOUT_MS 100
 
 // Configure LED
 #define LED_PIN GPIO_NUM_4
 
 // Configure BLE
-// TODO -> These should later be 128 bit
-#define BLE_SVC_UUID16 0xABC0     /* 16 Bit Service UUID */
-#define BLE_SVC_CHR_UUID16 0xABC1 /* 16 Bit Service Characteristic UUID */
-
-#define UART_TIMEOUT_MS 100
 #define NO_CONN_HANDLE 0xFFFF // When there is no active connection handle
 
 // Function declarations
@@ -106,56 +102,67 @@ static void print_conn_desc(const struct ble_gap_conn_desc *desc)
 
 static void advertise(void)
 {
-    struct ble_hs_adv_fields fields = {};
+    struct ble_hs_adv_fields fields = {0};
+    struct ble_hs_adv_fields rsp_fields = {0};
     const char *name = ble_svc_gap_device_name();
 
     // General discoverability and BLE-only (BR/EDR unsupported)
     fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
 
+    /* 128-bit service UUIDs (alert notifications) */
+    fields.uuids128 = (ble_uuid128_t[]){BLE_UUID128_INIT(GATT_SVC_UUID)};
+    fields.uuids128_is_complete = 1;
+    fields.num_uuids128 = 1;
+
+    // Try to set advertising fields
+    int status = ble_gap_adv_set_fields(&fields);
+    if (status != 0)
+    {
+        ESP_LOGE(TAG, "Error setting primary advertisement data; status = %d\n", status);
+        return;
+    }
+
+    // Scan response data
     /* Set device name */
-    fields.name = (uint8_t *)name;
-    fields.name_len = strlen(name);
-    fields.name_is_complete = 1;
+    rsp_fields.name = (uint8_t *)name;
+    rsp_fields.name_len = strlen(name);
+    rsp_fields.name_is_complete = 1;
 
     /* Set device tx power */
-    fields.tx_pwr_lvl = BLE_HS_ADV_TX_PWR_LVL_AUTO;
-    fields.tx_pwr_lvl_is_present = 1;
-
-    /* 16-bit service UUIDs (alert notifications) */
-    fields.uuids16 = (ble_uuid16_t[]){BLE_UUID16_INIT(BLE_SVC_UUID16)};
-    fields.uuids16_is_complete = 1;
-    fields.num_uuids16 = 1;
+    rsp_fields.tx_pwr_lvl = BLE_HS_ADV_TX_PWR_LVL_AUTO;
+    rsp_fields.tx_pwr_lvl_is_present = 1;
 
     /* Set device LE role */
-    fields.le_role = BLE_GAP_ROLE_SLAVE;
-    fields.le_role_is_present = 1;
+    rsp_fields.le_role = BLE_GAP_ROLE_SLAVE;
+    rsp_fields.le_role_is_present = 1;
 
-    int status = ble_gap_adv_set_fields(&fields);
+    // Try to set response fields
+    status = ble_gap_adv_rsp_set_fields(&rsp_fields);
+    if (status != 0)
+    {
+        ESP_LOGE(TAG, "Error setting scan response data; status = %d\n", status);
+        return;
+    }
+
+    // Start advertising
+    struct ble_gap_adv_params adv_params = {0};
+
+    /* Set connetable and general discoverable mode */
+    adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;
+    adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN;
+    // TODO -> Activate this later on
+    // adv_params.filter_policy = BLE_HCI_ADV_FILT_BOTH;
+    adv_params.filter_policy = BLE_HCI_ADV_FILT_NONE;
+
+    /* Start advertising */
+    status = ble_gap_adv_start(addr_type, NULL, BLE_HS_FOREVER, &adv_params, gap_event, NULL);
     if (status == 0)
     {
-        struct ble_gap_adv_params adv_params = {};
-
-        /* Set connetable and general discoverable mode */
-        adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;
-        adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN;
-        // TODO -> Activate this later on
-        // adv_params.filter_policy = BLE_HCI_ADV_FILT_BOTH;
-        adv_params.filter_policy = BLE_HCI_ADV_FILT_NONE;
-
-        /* Start advertising */
-        status = ble_gap_adv_start(addr_type, NULL, BLE_HS_FOREVER, &adv_params, gap_event, NULL);
-        if (status == 0)
-        {
-            ESP_LOGI(TAG, "Advertising started!");
-        }
-        else
-        {
-            ESP_LOGE(TAG, "Failed to start advertising, error code: %d", status);
-        }
+        ESP_LOGI(TAG, "Advertising started!");
     }
     else
     {
-        ESP_LOGE(TAG, "Error setting advertisement data; status = %d\n", status);
+        ESP_LOGE(TAG, "Failed to start advertising, error code: %d", status);
     }
 }
 
@@ -234,7 +241,7 @@ static int gap_event(struct ble_gap_event *event, void *)
     {
         ESP_LOGI(TAG, "Passkey Action. Action Type: %d", event->passkey.params.action);
 
-        struct ble_sm_io pkey = {};
+        struct ble_sm_io pkey = {0};
         pkey.action = event->passkey.params.action;
 
         // If the central expects us to display a passkey, we inject our static one
@@ -273,7 +280,7 @@ static void on_sync(void)
     printf("BLE Device Address: %02X:%02X:%02X:%02X:%02X:%02X\n",
            addr_val[5], addr_val[4], addr_val[3], addr_val[2], addr_val[1], addr_val[0]);
 
-    ble_addr_t client = {};
+    ble_addr_t client = {0};
     client.type = BLE_ADDR_RANDOM;
     memcpy(client.val, client_addr, sizeof(client_addr));
 
@@ -459,7 +466,7 @@ void app_main(void)
 
     // Taken straight from docs, except for baud_rate:
     // - https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/peripherals/uart.html
-    uart_config_t config = {};
+    uart_config_t config = {0};
     config.baud_rate = BAUDRATE; // From setting.h
     config.data_bits = UART_DATA_8_BITS;
     config.parity = UART_PARITY_DISABLE;
