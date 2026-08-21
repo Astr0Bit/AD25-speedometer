@@ -46,7 +46,7 @@ void UARTService::run()
             qDebug() << "Opened serialport";
         }
 
-        if (serial.waitForReadyRead(3 * Setting::INTERVAL))
+        if (serial.bytesAvailable() > 0 || serial.waitForReadyRead(3 * Setting::INTERVAL))
         {
             size_t nread{0};
             bool ok{true};
@@ -68,7 +68,7 @@ void UARTService::run()
                 }
                 else
                 {
-                    if (!serial.waitForReadyRead(20))
+                    if (!serial.waitForReadyRead(10))
                     {
                         ok = false;
                         qWarning() << "Not enough bytes received:  Expected:" << SBUFLEN << " Actual:" << nread;
