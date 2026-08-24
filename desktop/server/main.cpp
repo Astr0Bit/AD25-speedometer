@@ -17,11 +17,6 @@ int main(int argc, char **argv)
     app.setFont(defaultFont);
 #ifdef UARTCOM
     UARTService service;
-    if (!service.isRunning())
-    {
-        qCritical() << "Failed to create service, exiting...";
-        std::exit(EXIT_FAILURE);
-    }
 #else
     TCPService service;
 #endif

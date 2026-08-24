@@ -2,10 +2,18 @@
 #include "setting.h"
 #include <QSerialPort>
 #include "uartservice.h"
+#include <QCoreApplication>
 
 // Public
 UARTService::UARTService(QObject *parent) : QThread(parent)
 {
+    // Connects the fatalErrorOccurred signal to the main Qt application
+    // This makes the termination process graceful, and does not use std::exit
+    connect(this, &UARTService::fatalErrorOccurred, qApp, [](const QString &reason)
+            {
+        qCritical() << "Terminating application due to UART failure:" << reason;
+        QCoreApplication::exit(EXIT_FAILURE); }, Qt::QueuedConnection);
+
     this->start();
 }
 
@@ -28,27 +36,23 @@ void UARTService::run()
 
     if (!serial.setDataBits(QSerialPort::Data8))
     {
-        qCritical() << "Falied to set data bits for port!";
-        m_isRunning.store(false);
+        emit fatalErrorOccurred("Falied to set data bits for port!");
         return;
     }
     if (!serial.setParity(QSerialPort::NoParity))
     {
-        qCritical() << "Failed to set parity for port!";
-        m_isRunning.store(false);
+        emit fatalErrorOccurred("Failed to set parity for port!");
         return;
     }
     if (!serial.setStopBits(QSerialPort::OneStop))
     {
-        qCritical() << "Failed to set stop bit for port!";
-        m_isRunning.store(false);
+        emit fatalErrorOccurred("Failed to set stop bit for port!");
         return;
     }
 
-    if (!serial.setFlowControl(QSerialPort::NoFlowControl))
+    if (serial.setFlowControl(QSerialPort::NoFlowControl))
     {
-        qCritical() << "Failed to set flow control for port!";
-        m_isRunning.store(false);
+        emit fatalErrorOccurred("Failed to set flow control for port!");
         return;
     }
 

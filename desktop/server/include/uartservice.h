@@ -5,9 +5,11 @@
 #include <QSerialPort>
 #include "comservice.h"
 
-class UARTService : public COMService,
-                    public QThread
+class UARTService : public QThread,
+                    public COMService
 {
+    Q_OBJECT
+
 public:
     // Constructor to begin sending data over UART
     explicit UARTService(QObject *parent = nullptr);
@@ -20,6 +22,10 @@ public:
 
     // Destructor to clean up
     ~UARTService();
+
+signals:
+    // Notifies the Qt main thread if an error occured
+    void fatalErrorOccurred(const QString &reason);
 
 private:
     std::atomic_bool m_isRunning{true};
