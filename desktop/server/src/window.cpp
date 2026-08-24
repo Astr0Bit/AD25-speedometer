@@ -52,6 +52,10 @@ static void make_grid(QGridLayout &grid_layout, QWidget *(&cols)[COLS][ROWS])
 
 Window::Window(COMService &com_service) : m_com_service(com_service)
 {
+    // Makes the GUI "sticky", ie. not minimize when the user clicks outside it
+    // NOTE: Works only with X11 display server, not Wayland
+    this->setWindowFlags(Qt::WindowStaysOnTopHint);
+
     // * NOTE: Could be improved with functions
 
     // Array with all elements
