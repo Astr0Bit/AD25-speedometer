@@ -15,8 +15,7 @@ TCPService::TCPService()
     if (sockfd == -1)
     {
         qCritical() << "Failed to create TCP/IP socket!";
-        m_is_running.store(false);
-        return;
+        std::exit(EXIT_FAILURE);
     }
     else
     {
@@ -37,8 +36,7 @@ TCPService::TCPService()
     {
         qCritical() << "setsockopt failed...";
         close(sockfd);
-        m_is_running.store(false);
-        return;
+        std::exit(EXIT_FAILURE);
     }
 
     // Bind the socket address to the socket
@@ -49,12 +47,13 @@ TCPService::TCPService()
         // Spawn and hand the sockfd and thread to the TCPService object
         m_sockfd = sockfd;
         m_worker = std::thread(&TCPService::run, this);
+        m_is_running.store(true);
     }
     else
     {
         qCritical() << "Failed to bind servaddr to the socket...";
         close(sockfd);
-        m_is_running.store(false);
+        std::exit(EXIT_FAILURE);
     }
 }
 

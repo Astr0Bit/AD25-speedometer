@@ -10,7 +10,7 @@ class TCPService : public COMService
 {
 private:
     int m_sockfd{-1};
-    std::atomic_bool m_is_running{true};
+    std::atomic_bool m_is_running{false};
 
     // To later join the thread
     std::thread m_worker;
