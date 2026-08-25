@@ -64,11 +64,6 @@ TCPService::TCPService(QObject *parent) : QThread(parent)
     }
 }
 
-bool TCPService::isRunning()
-{
-    return m_is_running.load();
-}
-
 TCPService::~TCPService()
 {
     m_is_running.store(false);

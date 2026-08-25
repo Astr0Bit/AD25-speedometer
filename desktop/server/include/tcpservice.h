@@ -29,9 +29,6 @@ public:
     // Constructor to automatically start the server when created
     TCPService(QObject *parent = nullptr);
 
-    // Helper method to get running status
-    bool isRunning(void);
-
     // Destructor to clean up
     ~TCPService();
 };
