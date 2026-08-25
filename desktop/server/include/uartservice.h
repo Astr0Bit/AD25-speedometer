@@ -11,14 +11,23 @@ class UARTService : public QThread,
     Q_OBJECT
 
 public:
-    // Constructor to begin sending data over UART
+    /**
+     * @brief Construct a new UARTService object
+     *        Starts the UARTService::run worker thread
+     *
+     * @param parent Optional parent
+     */
     explicit UARTService(QObject *parent = nullptr);
 
     // Destructor to clean up
     ~UARTService();
 
 signals:
-    // Notifies the Qt main thread if an error occured
+    /**
+     * @brief Notifies the Qt main thread if an error occured
+     *
+     * @param reason The reason for the error
+     */
     void fatalErrorOccurred(const QString &reason);
 
 private:

@@ -13,7 +13,13 @@
 // - https://stackoverflow.com/questions/24016264/qt-how-to-disable-qcheckbox-while-retaining-checked-state
 // - https://doc.qt.io/qt-6/qabstractbutton.html#checked-prop
 
-// Helper function to make the grid
+/**
+ * @brief Helper function to make the grid
+ *
+ * @tparam COLS Number of columns for the grid
+ * @tparam ROWS Number of rows for the grid
+ * @param grid_layout Array with columns and rows
+ */
 template <size_t COLS, size_t ROWS>
 static void make_grid(QGridLayout &grid_layout, QWidget *(&cols)[COLS][ROWS])
 {

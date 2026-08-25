@@ -11,6 +11,25 @@ class TCPService : public QThread,
 {
     Q_OBJECT
 
+public:
+    /**
+     * @brief Construct a new TCPService object
+     *
+     * @param parent Optional parent
+     */
+    TCPService(QObject *parent = nullptr);
+
+    // Destructor to clean up
+    ~TCPService();
+
+signals:
+    /**
+     * @brief Notifies the Qt main thread if an error occured
+     *
+     * @param reason The reason for the error
+     */
+    void fatalErrorOccurred(const QString &reason);
+
 private:
     int m_sockfd{-1};
     std::atomic_bool m_is_running{false};
@@ -20,17 +39,6 @@ private:
      *
      */
     void run(void) override;
-
-signals:
-    // Notifies the Qt main thread if an error occured
-    void fatalErrorOccurred(const QString &reason);
-
-public:
-    // Constructor to automatically start the server when created
-    TCPService(QObject *parent = nullptr);
-
-    // Destructor to clean up
-    ~TCPService();
 };
 
 #endif
