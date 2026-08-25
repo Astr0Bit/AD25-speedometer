@@ -108,7 +108,7 @@ static void advertise(void)
     fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
 
     /* 128-bit service UUIDs (alert notifications) */
-    fields.uuids128 = (ble_uuid128_t[]){BLE_UUID128_INIT(GATT_SVC_UUID)};
+    fields.uuids128 = &svc_uuid;
     fields.uuids128_is_complete = 1;
     fields.num_uuids128 = 1;
 
@@ -148,9 +148,7 @@ static void advertise(void)
     /* Set connetable and general discoverable mode */
     adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;
     adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN;
-    // TODO -> Activate this later on
-    // adv_params.filter_policy = BLE_HCI_ADV_FILT_BOTH;
-    adv_params.filter_policy = BLE_HCI_ADV_FILT_NONE;
+    adv_params.filter_policy = BLE_HCI_ADV_FILT_BOTH;
 
     /* Start advertising */
     status = ble_gap_adv_start(addr_type, NULL, BLE_HS_FOREVER, &adv_params, gap_event, NULL);
