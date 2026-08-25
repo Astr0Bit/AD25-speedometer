@@ -15,11 +15,6 @@ UARTService::~UARTService()
     this->wait();
 }
 
-bool UARTService::isRunning() const noexcept
-{
-    return !m_stop;
-}
-
 void UARTService::run()
 {
     QSerialPort serial;
