@@ -87,10 +87,7 @@ Window::Window(COMService &com_service) : m_com_service(com_service)
                     valLabel.setText(QString("%1 %2").arg(value).arg(unit));
 
                     // Invoke the COMService setter method
-                    (m_com_service.*setterMethod)(value);
-
-                    // std::cout << "Set buffer value for slider\n";
-                });
+                    (m_com_service.*setterMethod)(value); });
 
         // Add min value for each signal to the buffer on boot
         (m_com_service.*setterMethod)(min);
@@ -127,7 +124,6 @@ Window::Window(COMService &com_service) : m_com_service(com_service)
 
         // Push values to buffer
         m_com_service.setLightSignals(is_left_active, is_right_active);
-        // std::cout << "Set light signals in buffer.\n";
     };
 
     connect(&box_left, &QCheckBox::toggled, this, updateLights);
