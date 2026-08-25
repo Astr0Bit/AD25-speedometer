@@ -151,8 +151,6 @@ static void on_sync(void)
     rc = ble_hs_id_copy_addr(s_addr_type, addr, NULL);
     assert(rc == 0);
 
-    ESP_LOGI(TAG, "BLE Device Address: %02X:%02X:%02X:%02X:%02X:%02X\n", addr[5], addr[4], addr[3], addr[2], addr[1], addr[0]);
-
     /* Begin scanning for a peripheral to connect to. */
     scan();
 }
@@ -306,7 +304,6 @@ static int gap_event(struct ble_gap_event* event, void*)
     {
         if (0 == ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc))
         {
-            ESP_LOGW(TAG, "Stale bond for peer, deleting and re-pairing");
             rc = ble_store_util_delete_peer(&desc.peer_id_addr);
             assert(rc == 0);
             status = BLE_GAP_REPEAT_PAIRING_RETRY;
