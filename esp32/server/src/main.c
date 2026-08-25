@@ -508,6 +508,10 @@ void app_main(void)
             }
         }
 
+        // Clear buffer when not connected to BLE client
+        uart_flush_input(UART);
+        xQueueReset(queue);
+
         // Turn of LED if not connected to BLE client
         ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 0));
     }
