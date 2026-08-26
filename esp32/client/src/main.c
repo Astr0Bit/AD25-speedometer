@@ -9,6 +9,7 @@
 #include "nimble/nimble_port.h"
 #include "services/gap/ble_svc_gap.h"
 #include "nimble/nimble_port_freertos.h"
+#include "led_strip.h"
 #include "setting.h"
 
 #define TAG "BLE-UART"
@@ -18,6 +19,10 @@
 #define UART_TX_BUF_SIZE ((2 * SBUFLEN >= UART_RX_BUF_SIZE) ? 2 * SBUFLEN : UART_RX_BUF_SIZE)
 
 #define DEVICE_NAME TAG
+
+#define LED_HSV_INIT 37, 255, 10
+#define LED_HSV_SCANNING 210, 255, 10
+#define LED_HSV_CONNECTED 120, 255, 10
 
 static const uint8_t s_server_addr[] = SERVER_ADDR;
 static const uint8_t s_client_addr[] = CLIENT_ADDR;
@@ -35,12 +40,17 @@ static uint16_t s_chr_val_handle;
 static bool s_enc_done = false;
 static bool s_chr_found = false;
 
+static led_strip_handle_t s_led;
+
 extern void ble_store_config_init(void);
 static int gap_event(struct ble_gap_event* event, void* arg);
 static void try_start_dsc_discovery(uint16_t conn_handle);
 
 static void scan(void)
 {
+    ESP_ERROR_CHECK(led_strip_set_pixel_hsv(s_led, 0, LED_HSV_SCANNING));
+    ESP_ERROR_CHECK(led_strip_refresh(s_led));
+
     struct ble_gap_disc_params disc_params = {0};
 
     disc_params.passive = 1;           /* Perform a passive scan. */
@@ -56,7 +66,12 @@ static void scan(void)
 
 static int on_subscription(uint16_t conn_handle, const struct ble_gatt_error* error, struct ble_gatt_attr* attr, void*)
 {
-    if (error->status != 0)
+    if (error->status == 0)
+    {
+        ESP_ERROR_CHECK(led_strip_set_pixel_hsv(s_led, 0, LED_HSV_CONNECTED));
+        ESP_ERROR_CHECK(led_strip_refresh(s_led));
+    }
+    else
     {
         ble_gap_terminate(conn_handle, BLE_ERR_CONN_TERM_LOCAL);
     }
@@ -321,19 +336,46 @@ static int gap_event(struct ble_gap_event* event, void*)
     return status;
 }
 
-void app_main(void)
+void configure_led(void)
+{
+    led_strip_config_t strip_config = {
+        .strip_gpio_num = GPIO_NUM_8,
+        .max_leds = 1,
+        .led_model = LED_MODEL_WS2812,
+        .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB,
+        .flags = {
+            .invert_out = false,
+        }
+    };
+    led_strip_spi_config_t spi_config = {
+        .clk_src = SPI_CLK_SRC_DEFAULT,
+        .spi_bus = SPI2_HOST,
+        .flags = {
+            .with_dma = true,
+        }
+    };
+    ESP_ERROR_CHECK(led_strip_new_spi_device(&strip_config, &spi_config, &s_led));
+    ESP_ERROR_CHECK(led_strip_set_pixel_hsv(s_led, 0, LED_HSV_INIT));
+    ESP_ERROR_CHECK(led_strip_refresh(s_led));
+}
+void configure_uart(void)
 {
     uart_config_t config = {
-        .baud_rate = BAUDRATE,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_DEFAULT,
+            .baud_rate = BAUDRATE,
+            .data_bits = UART_DATA_8_BITS,
+            .parity = UART_PARITY_DISABLE,
+            .stop_bits = UART_STOP_BITS_1,
+            .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+            .source_clk = UART_SCLK_DEFAULT,
     };
-
     ESP_ERROR_CHECK(uart_driver_install(UART, UART_RX_BUF_SIZE, UART_TX_BUF_SIZE, 0, NULL, 0));
     ESP_ERROR_CHECK(uart_param_config(UART, &config));
+}
+
+void app_main(void)
+{
+    configure_led();
+    configure_uart();
 
     esp_err_t status = nvs_flash_init();
     if (status == ESP_ERR_NVS_NO_FREE_PAGES || status == ESP_ERR_NVS_NEW_VERSION_FOUND)
