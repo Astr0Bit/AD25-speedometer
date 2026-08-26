@@ -24,6 +24,7 @@ void UARTService::run()
     serial.setParity(QSerialPort::NoParity);
     serial.setStopBits(QSerialPort::OneStop);
     serial.setFlowControl(QSerialPort::NoFlowControl);
+    serial.setReadBufferSize(SBUFLEN);
 
     uint8_t tmpbuf[SBUFLEN];
     while (!m_stop)
@@ -37,44 +38,26 @@ void UARTService::run()
                 this->msleep(Setting::UART::CLIENT_RETRY_OPEN_INTERVAL);
                 continue;
             }
-            m_status = true;
             qDebug() << "Opened serialport";
+            serial.clear();
         }
 
-        if (serial.bytesAvailable() > 0 || serial.waitForReadyRead(3 * Setting::INTERVAL))
+        if (serial.waitForReadyRead(3 * Setting::INTERVAL))
         {
-            size_t nread{0};
-            bool ok{true};
-            while (nread < SBUFLEN && !m_stop)
+            if (SBUFLEN == serial.read(reinterpret_cast<char*>(tmpbuf), SBUFLEN))
             {
-                qint64 n = serial.read(reinterpret_cast<char*>(tmpbuf + nread), static_cast<qint64>(SBUFLEN - nread));
-                if (n > 0)
                 {
-                    nread += static_cast<size_t>(n);
+                    std::lock_guard<std::mutex> lock{m_mtx};
+                    std::memcpy(m_buffer, tmpbuf, SBUFLEN);
                 }
-                else if (n < 0)
-                {
-                    m_status = false;
-                    ok = false;
-                    serial.close();
-                    qWarning() << "Failed to read: " << serial.error();
-                    this->msleep(Setting::UART::CLIENT_RETRY_OPEN_INTERVAL);
-                    break;
-                }
-                else
-                {
-                    if (!serial.waitForReadyRead(10))
-                    {
-                        ok = false;
-                        qWarning() << "Not enough bytes received:  Expected:" << SBUFLEN << " Actual:" << nread;
-                        break;
-                    }
-                }
+                m_status = true;
             }
-            if (ok)
+            else
             {
-                std::lock_guard<std::mutex> lock{m_mtx};
-                std::memcpy(m_buffer, tmpbuf, SBUFLEN);
+                m_status = false;
+                serial.close();
+                qWarning() << "Failed to read: " << serial.error();
+                this->msleep(Setting::UART::CLIENT_RETRY_OPEN_INTERVAL);
             }
         }
         else
