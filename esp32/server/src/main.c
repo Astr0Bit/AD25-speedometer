@@ -150,9 +150,6 @@ static int gap_event(struct ble_gap_event *event, void *)
     case BLE_GAP_EVENT_CONNECT: /* A new connection was established or a connection attempt failed. */
         if (event->connect.status == 0)
         {
-            // Save current connection handle
-            active_conn_handle = event->connect.conn_handle;
-
             assert(0 == ble_gap_conn_find(event->connect.conn_handle, &desc));
         }
         else
@@ -177,6 +174,8 @@ static int gap_event(struct ble_gap_event *event, void *)
         break;
 
     case BLE_GAP_EVENT_SUBSCRIBE:
+        // Save current connection handle
+        active_conn_handle = event->subscribe.conn_handle;
         break;
 
     case BLE_GAP_EVENT_REPEAT_PAIRING:                                            /* Repeat pairing event */
