@@ -36,6 +36,7 @@ static const char *TAG = "SERVER";
 #define NO_CONN_HANDLE 0xFFFF // When there is no active connection handle
 
 // Function declarations
+extern void ble_store_config_init(void);
 static int gap_event(struct ble_gap_event *event, void *arg);
 static int service_gatt_handler(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt, void *arg) { return 0; }
 
@@ -311,6 +312,7 @@ static ble_err_t ble_setup()
     ble_hs_cfg.sm_io_cap = BLE_HS_IO_DISPLAY_ONLY;
     ble_hs_cfg.sm_our_key_dist |= BLE_SM_PAIR_KEY_DIST_ENC;
     ble_hs_cfg.sm_their_key_dist |= BLE_SM_PAIR_KEY_DIST_ENC;
+    ble_store_config_init();
 
     /* Register custom service */
     if (0 != gatt_svr_init())
