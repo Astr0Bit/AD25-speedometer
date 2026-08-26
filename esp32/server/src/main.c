@@ -2,13 +2,14 @@
 #include "setting.h"
 #include "esp_log.h"
 #include <stdbool.h>
+#include "led_strip.h"
 #include <esp_timer.h>
 #include "nvs_flash.h"
 #include "nimble/ble.h"
 #include "host/ble_hs.h"
 #include "host/ble_sm.h"
 #include "driver/uart.h"
-#include <driver/gpio.h>
+// #include <driver/gpio.h>
 #include <esp_task_wdt.h>
 #include "host/util/util.h"
 #include "nimble/nimble_port.h"
@@ -30,7 +31,15 @@ static const char *TAG = "SERVER";
 #define UART_TIMEOUT_MS 100
 
 // Configure LED
-#define LED_PIN GPIO_NUM_4
+// #define LED_PIN GPIO_NUM_4
+
+// Configure RGB LED
+#define RGB_PIN GPIO_NUM_8
+#define LED_HSV_OFF 0, 0, 0
+#define LED_HSV_PKT 210, 255, 10
+#define LED_HSV_INIT 37, 255, 10
+#define LED_HSV_CONNECTED 120, 255, 10
+static led_strip_handle_t s_led;
 
 // Configure BLE
 #define NO_CONN_HANDLE 0xFFFF // When there is no active connection handle
@@ -38,6 +47,7 @@ static const char *TAG = "SERVER";
 // Function declarations
 extern void ble_store_config_init(void);
 static int gap_event(struct ble_gap_event *event, void *arg);
+static void set_rgb(led_strip_handle_t led, uint16_t hue, uint8_t saturation, uint8_t value);
 static int service_gatt_handler(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt, void *arg) { return 0; }
 
 static uint8_t addr_type;
@@ -177,6 +187,9 @@ static int gap_event(struct ble_gap_event *event, void *)
     case BLE_GAP_EVENT_SUBSCRIBE:
         // Save current connection handle
         active_conn_handle = event->subscribe.conn_handle;
+
+        // Set color of on-board RGB led
+        set_rgb(s_led, LED_HSV_CONNECTED);
         break;
 
     case BLE_GAP_EVENT_REPEAT_PAIRING:                                            /* Repeat pairing event */
@@ -336,6 +349,13 @@ static void ble_host_task(void *param)
     nimble_port_freertos_deinit();
 }
 
+// Helper for setting the RGB led
+static void set_rgb(led_strip_handle_t led, uint16_t hue, uint8_t saturation, uint8_t value)
+{
+    ESP_ERROR_CHECK(led_strip_set_pixel_hsv(s_led, 0, hue, saturation, value));
+    ESP_ERROR_CHECK(led_strip_refresh(s_led));
+}
+
 // Blinking patterns for BLE error codes
 void ble_err_strobe()
 {
@@ -346,9 +366,9 @@ void ble_err_strobe()
 
     for (int i = 0; i < N_STROBES; i++)
     {
-        ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 1));
+        set_rgb(s_led, LED_HSV_INIT);
         vTaskDelay(pdMS_TO_TICKS(STROBE_SHORT_MS));
-        ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 0));
+        set_rgb(s_led, LED_HSV_OFF);
         vTaskDelay(pdMS_TO_TICKS(STROBE_LONG_MS));
     }
     vTaskDelay(pdMS_TO_TICKS(STROBE_PAUSE_MS));
@@ -359,23 +379,43 @@ void ble_err_heartbeat()
     static const int BEAT_MS = 100;
     static const int BEAT_PAUSE_MS = 700;
 
-    ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 1));
+    set_rgb(s_led, LED_HSV_INIT);
     vTaskDelay(pdMS_TO_TICKS(BEAT_MS));
-    ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 0));
+    set_rgb(s_led, LED_HSV_OFF);
     vTaskDelay(pdMS_TO_TICKS(BEAT_MS));
-    ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 1));
+    set_rgb(s_led, LED_HSV_INIT);
     vTaskDelay(pdMS_TO_TICKS(BEAT_MS));
 
-    ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 0));
+    set_rgb(s_led, LED_HSV_OFF);
     vTaskDelay(pdMS_TO_TICKS(BEAT_PAUSE_MS)); // Pause before repeating sequence
 }
 
 void ble_err_success()
 {
     static const int SUCCESS_PAUSE_MS = 2000;
-    ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 1));
+    set_rgb(s_led, LED_HSV_INIT);
     vTaskDelay(pdMS_TO_TICKS(SUCCESS_PAUSE_MS));
-    ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 0));
+    set_rgb(s_led, LED_HSV_OFF);
+}
+
+void configure_led(void)
+{
+    led_strip_config_t strip_config = {
+        .strip_gpio_num = GPIO_NUM_8,
+        .max_leds = 1,
+        .led_model = LED_MODEL_WS2812,
+        .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB,
+        .flags = {
+            .invert_out = false,
+        }};
+    led_strip_spi_config_t spi_config = {
+        .clk_src = SPI_CLK_SRC_DEFAULT,
+        .spi_bus = SPI2_HOST,
+        .flags = {
+            .with_dma = true,
+        }};
+    ESP_ERROR_CHECK(led_strip_new_spi_device(&strip_config, &spi_config, &s_led));
+    set_rgb(s_led, LED_HSV_INIT);
 }
 
 void app_main(void)
@@ -383,22 +423,21 @@ void app_main(void)
     // Exclude the Idle Task from the Task WDT
     ESP_ERROR_CHECK(esp_task_wdt_delete(xTaskGetIdleTaskHandle()));
 
-    ESP_ERROR_CHECK(gpio_reset_pin(LED_PIN));
-    ESP_ERROR_CHECK(gpio_set_direction(LED_PIN, GPIO_MODE_OUTPUT)); // Configure pin 4 as a digital output pin
-    uint32_t led_state = 0;
+    configure_led();
 
     // ** For UART **
     QueueHandle_t queue;
 
     // Taken straight from docs, except for baud_rate:
     // - https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/peripherals/uart.html
-    uart_config_t config = {0};
-    config.baud_rate = BAUDRATE; // From setting.h
-    config.data_bits = UART_DATA_8_BITS;
-    config.parity = UART_PARITY_DISABLE;
-    config.stop_bits = UART_STOP_BITS_1;
-    config.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
-    config.source_clk = UART_SCLK_DEFAULT;
+    uart_config_t config = {
+        .baud_rate = BAUDRATE, // From setting.h
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
 
     // Install driver and configure UART
     ESP_ERROR_CHECK(uart_driver_install(UART, UART_BUF_SIZE, UART_BUF_SIZE, QUEUE_SIZE, &queue, 0));
@@ -458,8 +497,7 @@ void app_main(void)
                         struct os_mbuf *txom = ble_hs_mbuf_from_flat(buffer, sizeof(buffer));
                         if (0 == ble_gatts_notify_custom(active_conn_handle, chrval_handle, txom))
                         {
-                            led_state = !led_state;
-                            ESP_ERROR_CHECK(gpio_set_level(LED_PIN, led_state));
+                            set_rgb(s_led, LED_HSV_PKT);
                         }
                         else
                         {
@@ -505,7 +543,7 @@ void app_main(void)
             }
             else
             {
-                ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 0));
+                set_rgb(s_led, LED_HSV_CONNECTED);
             }
         }
 
@@ -514,6 +552,9 @@ void app_main(void)
         xQueueReset(queue);
 
         // Turn of LED if not connected to BLE client
-        ESP_ERROR_CHECK(gpio_set_level(LED_PIN, 0));
+        set_rgb(s_led, LED_HSV_OFF);
+
+        // Delay to not break the ESP32
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
