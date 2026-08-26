@@ -50,7 +50,7 @@ void UARTService::run()
         return;
     }
 
-    if (serial.setFlowControl(QSerialPort::NoFlowControl))
+    if (!serial.setFlowControl(QSerialPort::NoFlowControl))
     {
         emit fatalErrorOccurred("Failed to set flow control for port!");
         return;
