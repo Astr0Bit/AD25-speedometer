@@ -2,7 +2,6 @@
 #define UARTCOM_H
 
 #include <QThread>
-#include <QSerialPort>
 #include "comservice.h"
 
 class UARTService : public QThread,
