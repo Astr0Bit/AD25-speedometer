@@ -11,6 +11,15 @@
 
 class Window : public QDialog
 {
+public:
+    /**
+     * @brief Construct a new Window object
+     *        Window and element placement created here
+     *
+     * @param com_service The protocol to use for sending the buffer
+     */
+    Window(COMService &com_service);
+
 private:
     // Use grid layout
     QGridLayout sld_layout;
@@ -41,15 +50,6 @@ private:
 
     // COMService reference (singleton)
     COMService &m_com_service;
-
-public:
-    /**
-     * @brief Construct a new Window object
-     *        Window and element placement created here
-     *
-     * @param com_service The protocol to use for sending the buffer
-     */
-    Window(COMService &com_service);
 };
 
 #endif
