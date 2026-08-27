@@ -2,6 +2,7 @@
 #include "setting.h"
 #include <QSerialPort>
 #include "uartservice.h"
+#include <QCoreApplication>
 
 // Public
 UARTService::UARTService(QObject *parent) : QThread(parent)
@@ -20,37 +21,16 @@ void UARTService::run()
 {
     // Configure serial
     QSerialPort serial;
+
+    qDebug() << "Begin serial port config...";
+    // ! NOTE: These can fail, but only if the port is opened before, which it isn't
     serial.setPortName(m_portName);
-    qDebug() << "Set port name to" << m_portName;
-
     serial.setBaudRate(BAUDRATE);
-    qDebug() << "Set baud rate to" << BAUDRATE;
-
-    if (!serial.setDataBits(QSerialPort::Data8))
-    {
-        qCritical() << "Falied to set data bits for port!";
-        m_isRunning.store(false);
-        return;
-    }
-    if (!serial.setParity(QSerialPort::NoParity))
-    {
-        qCritical() << "Failed to set parity for port!";
-        m_isRunning.store(false);
-        return;
-    }
-    if (!serial.setStopBits(QSerialPort::OneStop))
-    {
-        qCritical() << "Failed to set stop bit for port!";
-        m_isRunning.store(false);
-        return;
-    }
-
-    if (!serial.setFlowControl(QSerialPort::NoFlowControl))
-    {
-        qCritical() << "Failed to set flow control for port!";
-        m_isRunning.store(false);
-        return;
-    }
+    serial.setDataBits(QSerialPort::Data8);
+    serial.setParity(QSerialPort::NoParity);
+    serial.setStopBits(QSerialPort::OneStop);
+    serial.setFlowControl(QSerialPort::NoFlowControl);
+    qDebug() << "Finished serial port config";
 
     // Open the port
     serial.open(QIODeviceBase::WriteOnly);

@@ -11,13 +11,22 @@
 
 class Window : public QDialog
 {
+public:
+    /**
+     * @brief Construct a new Window object
+     *        Window and element placement created here
+     *
+     * @param com_service The protocol to use for sending the buffer
+     */
+    Window(COMService &com_service);
+
 private:
-    // * Use grid layout
+    // Use grid layout
     QGridLayout sld_layout;
     QHBoxLayout box_layout;
 
-    // * Window elements *
-    // * Labels
+    // Window elements *
+    // Labels
     QLabel lbl_speed{tr("Speed: ")};
     QLabel lbl_speed_val{tr("0 Kph")};
 
@@ -29,22 +38,18 @@ private:
 
     QLabel lbl_light{tr("Light Signals: ")};
 
-    // * Sliders
+    // Sliders
     QSlider sld_bat{Qt::Horizontal};
     QSlider sld_temp{Qt::Horizontal};
     QSlider sld_speed{Qt::Horizontal};
 
-    // * Checkboxes
+    // Checkboxes
     QCheckBox box_left{"Left"};
     QCheckBox box_right{"Right"};
     QCheckBox box_warning{"Warning"};
 
-    // * COMService reference (singleton)
+    // COMService reference (singleton)
     COMService &m_com_service;
-
-public:
-    // * Window and element placement created here
-    Window(COMService &com_service);
 };
 
 #endif

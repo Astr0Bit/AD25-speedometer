@@ -6,26 +6,15 @@
 #include <cstdint>
 #include "setting.h"
 
-// * Abstract class for communication using multithreading
+// Abstract class for communication using multithreading
 class COMService
 {
-protected:
-    // * Buffer, mutex, and atomic variables for class
-    uint8_t m_buf[SBUFLEN]{0};
-    mutable std::mutex m_mtx;
-    std::atomic_bool m_status{false};
-
-    // * Send buffer
-    virtual void run(void) = 0;
-
-private:
-    void insert_helper(int val, const char *sig_str);
 
 public:
-    // * Destructor needed for inheritance
+    // Destructor needed for inheritance
     virtual ~COMService() = default;
 
-    // * Methods for inserting:
+    // Methods for inserting:
     /**
      * @brief Insert speed (Kph) into buffer
      *
@@ -65,6 +54,28 @@ public:
     {
         return m_status;
     };
+
+protected:
+    // Buffer, mutex, and atomic variables for class
+    uint8_t m_buf[SBUFLEN]{0};
+    mutable std::mutex m_mtx;
+    std::atomic_bool m_status{false};
+
+    /**
+     * @brief Overwritten by the children, sends the buffer over the given protocol
+     *
+     */
+    virtual void run(void) = 0;
+
+private:
+    /**
+     * @brief Helper to insert a signal into the buffer, given a signal string.
+     *        For internal use ONLY
+     *
+     * @param val Value to insert
+     * @param sig_str Signal string
+     */
+    void insert_helper(int val, const char *sig_str);
 };
 
 #endif

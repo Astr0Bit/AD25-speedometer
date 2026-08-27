@@ -6,16 +6,23 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <netinet/in.h>
+#include <QCoreApplication>
 
 // Public
-TCPService::TCPService()
+TCPService::TCPService(QObject *parent) : QThread(parent)
 {
+    // Connects the fatalErrorOccurred signal to the main Qt application
+    // This makes the termination process graceful, and does not use std::exit
+    connect(this, &TCPService::fatalErrorOccurred, qApp, [](const QString &reason)
+            {
+        qCritical() << "Terminating application due to TCP failure:" << reason;
+        QCoreApplication::exit(EXIT_FAILURE); }, Qt::QueuedConnection);
+
     // Attempt to create the TCP / IP socket
     int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
     if (sockfd == -1)
     {
-        qCritical() << "Failed to create TCP/IP socket!";
-        m_is_running.store(false);
+        emit fatalErrorOccurred("Failed to create TCP/IP socket!");
         return;
     }
     else
@@ -35,9 +42,8 @@ TCPService::TCPService()
     int opt = 1;
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
     {
-        qCritical() << "setsockopt failed...";
         close(sockfd);
-        m_is_running.store(false);
+        emit fatalErrorOccurred("setsockopt failed...");
         return;
     }
 
@@ -48,19 +54,14 @@ TCPService::TCPService()
 
         // Spawn and hand the sockfd and thread to the TCPService object
         m_sockfd = sockfd;
-        m_worker = std::thread(&TCPService::run, this);
+        this->start();
     }
     else
     {
-        qCritical() << "Failed to bind servaddr to the socket...";
         close(sockfd);
-        m_is_running.store(false);
+        emit fatalErrorOccurred("Failed to bind servaddr to the socket...");
+        return;
     }
-}
-
-bool TCPService::isRunning()
-{
-    return m_is_running.load();
 }
 
 TCPService::~TCPService()
@@ -75,10 +76,7 @@ TCPService::~TCPService()
     }
 
     // Join the worker thread
-    if (m_worker.joinable())
-    {
-        m_worker.join();
-    }
+    this->wait();
 }
 
 // Protected
@@ -86,6 +84,7 @@ void TCPService::run(void)
 {
     if (0 == listen(m_sockfd, Setting::TCP::N_CONNS))
     {
+        m_is_running.store(true);
         qDebug() << "Listening for incoming connections...";
 
         // Outer loop -> Constantly checks for new incomming connection requests
@@ -108,7 +107,7 @@ void TCPService::run(void)
                     // * Periodically send the COMService buffer
 
                     // Wait x milliseconds before sending the packet
-                    std::this_thread::sleep_for(std::chrono::milliseconds(Setting::INTERVAL));
+                    QThread::msleep(Setting::INTERVAL);
 
                     ssize_t bytes_sent = 0;
 
@@ -150,6 +149,6 @@ void TCPService::run(void)
     }
     else
     {
-        qCritical() << "Failed to listen to the port...";
+        emit fatalErrorOccurred("Failed to listen to the port...");
     }
 }

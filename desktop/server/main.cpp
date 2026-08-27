@@ -1,4 +1,3 @@
-#include <QThread>
 #include "window.h"
 
 #ifdef UARTCOM
@@ -18,18 +17,8 @@ int main(int argc, char **argv)
     app.setFont(defaultFont);
 #ifdef UARTCOM
     UARTService service;
-    if (!service.isRunning())
-    {
-        qCritical() << "Failed to create service, exiting...";
-        std::exit(EXIT_FAILURE);
-    }
 #else
     TCPService service;
-    if (!service.isRunning())
-    {
-        qCritical() << "Failed to create service, exiting...";
-        std::exit(EXIT_FAILURE);
-    }
 #endif
 
     qDebug() << "Starting server GUI...";

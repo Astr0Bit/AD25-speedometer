@@ -13,7 +13,13 @@
 // - https://stackoverflow.com/questions/24016264/qt-how-to-disable-qcheckbox-while-retaining-checked-state
 // - https://doc.qt.io/qt-6/qabstractbutton.html#checked-prop
 
-// Helper function to make the grid
+/**
+ * @brief Helper function to make the grid
+ *
+ * @tparam COLS Number of columns for the grid
+ * @tparam ROWS Number of rows for the grid
+ * @param grid_layout Array with columns and rows
+ */
 template <size_t COLS, size_t ROWS>
 static void make_grid(QGridLayout &grid_layout, QWidget *(&cols)[COLS][ROWS])
 {
@@ -52,6 +58,10 @@ static void make_grid(QGridLayout &grid_layout, QWidget *(&cols)[COLS][ROWS])
 
 Window::Window(COMService &com_service) : m_com_service(com_service)
 {
+    // Makes the GUI "sticky", ie. not minimize when the user clicks outside it
+    // NOTE: Works only with X11 display server, not Wayland
+    this->setWindowFlags(Qt::WindowStaysOnTopHint);
+
     // * NOTE: Could be improved with functions
 
     // Array with all elements
@@ -83,10 +93,7 @@ Window::Window(COMService &com_service) : m_com_service(com_service)
                     valLabel.setText(QString("%1 %2").arg(value).arg(unit));
 
                     // Invoke the COMService setter method
-                    (m_com_service.*setterMethod)(value);
-
-                    // std::cout << "Set buffer value for slider\n";
-                });
+                    (m_com_service.*setterMethod)(value); });
 
         // Add min value for each signal to the buffer on boot
         (m_com_service.*setterMethod)(min);
@@ -123,7 +130,6 @@ Window::Window(COMService &com_service) : m_com_service(com_service)
 
         // Push values to buffer
         m_com_service.setLightSignals(is_left_active, is_right_active);
-        // std::cout << "Set light signals in buffer.\n";
     };
 
     connect(&box_left, &QCheckBox::toggled, this, updateLights);

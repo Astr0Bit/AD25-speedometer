@@ -2,21 +2,20 @@
 #define UARTCOM_H
 
 #include <QThread>
-#include <QSerialPort>
 #include "comservice.h"
 
-class UARTService : public COMService,
-                    public QThread
+class UARTService : public QThread,
+                    public COMService
 {
-public:
-    // Constructor to begin sending data over UART
-    explicit UARTService(QObject *parent = nullptr);
 
-    // Helper method to get running status
-    bool isRunning()
-    {
-        return m_isRunning.load();
-    }
+public:
+    /**
+     * @brief Construct a new UARTService object
+     *        Starts the UARTService::run worker thread
+     *
+     * @param parent Optional parent
+     */
+    explicit UARTService(QObject *parent = nullptr);
 
     // Destructor to clean up
     ~UARTService();
