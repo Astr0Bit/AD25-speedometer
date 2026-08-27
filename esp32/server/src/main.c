@@ -129,7 +129,7 @@ void app_main(void)
 
     // ** For BLE **
     ble_err_t ble_status = ble_setup();
-    check_ble_status(ble_status); // NOTE: Blocking unless BLE_ERR_SUCCESS
+    check_ble_status(ble_status); // NOTE: Blocking unless BLE_OK
 
     // Start the BLE task as a separate non-blocking task
     nimble_port_freertos_init(ble_host_task);
