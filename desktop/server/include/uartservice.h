@@ -22,14 +22,6 @@ public:
     // Destructor to clean up
     ~UARTService();
 
-signals:
-    /**
-     * @brief Notifies the Qt main thread if an error occured
-     *
-     * @param reason The reason for the error
-     */
-    void fatalErrorOccurred(const QString &reason);
-
 private:
     std::atomic_bool m_isRunning{true};
 

@@ -7,13 +7,6 @@
 // Public
 UARTService::UARTService(QObject *parent) : QThread(parent)
 {
-    // Connects the fatalErrorOccurred signal to the main Qt application
-    // This makes the termination process graceful, and does not use std::exit
-    connect(this, &UARTService::fatalErrorOccurred, qApp, [](const QString &reason)
-            {
-        qCritical() << "Terminating application due to UART failure:" << reason;
-        QCoreApplication::exit(EXIT_FAILURE); }, Qt::QueuedConnection);
-
     this->start();
 }
 
@@ -28,33 +21,16 @@ void UARTService::run()
 {
     // Configure serial
     QSerialPort serial;
+
+    qDebug() << "Begin serial port config...";
+    // ! NOTE: These can fail, but only if the port is opened before, which it isn't
     serial.setPortName(m_portName);
-    qDebug() << "Set port name to" << m_portName;
-
     serial.setBaudRate(BAUDRATE);
-    qDebug() << "Set baud rate to" << BAUDRATE;
-
-    if (!serial.setDataBits(QSerialPort::Data8))
-    {
-        emit fatalErrorOccurred("Falied to set data bits for port!");
-        return;
-    }
-    if (!serial.setParity(QSerialPort::NoParity))
-    {
-        emit fatalErrorOccurred("Failed to set parity for port!");
-        return;
-    }
-    if (!serial.setStopBits(QSerialPort::OneStop))
-    {
-        emit fatalErrorOccurred("Failed to set stop bit for port!");
-        return;
-    }
-
-    if (!serial.setFlowControl(QSerialPort::NoFlowControl))
-    {
-        emit fatalErrorOccurred("Failed to set flow control for port!");
-        return;
-    }
+    serial.setDataBits(QSerialPort::Data8);
+    serial.setParity(QSerialPort::NoParity);
+    serial.setStopBits(QSerialPort::OneStop);
+    serial.setFlowControl(QSerialPort::NoFlowControl);
+    qDebug() << "Finished serial port config";
 
     // Open the port
     serial.open(QIODeviceBase::WriteOnly);
