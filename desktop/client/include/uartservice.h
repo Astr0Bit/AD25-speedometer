@@ -7,12 +7,11 @@
 class UARTService : public COMService, public QThread
 {
     std::atomic_bool m_stop{false};
+
+    void run() override;
 public:
     explicit UARTService(QObject* parent = nullptr);
-    ~UARTService() override;
-
-protected:
-    void run() override;
+    ~UARTService();
 };
 
 #endif

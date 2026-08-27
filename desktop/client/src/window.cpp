@@ -7,6 +7,7 @@ Window::Window(COMService &com_service, QWidget *parent)
       m_layout(this),
       m_com_service(com_service)
 {
+    setWindowFlags(Qt::WindowStaysOnTopHint);
     setWindowTitle("Speedometer client");
 
     m_layout.setContentsMargins(0, 0, 0, 0);
