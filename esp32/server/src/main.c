@@ -180,9 +180,6 @@ void app_main(void)
         // Clear buffer when not connected to BLE client
         uart_flush_input(UART);
 
-        // Turn of LED if not connected to BLE client
-        set_rgb(s_led, LED_HSV_OFF);
-
         // Delay to not break the ESP32
         vTaskDelay(pdMS_TO_TICKS(BLE_DISCONNECT_INTERVAL_MS));
     }
@@ -362,6 +359,10 @@ static int gap_event(struct ble_gap_event *event, void *)
     case BLE_GAP_EVENT_DISCONNECT:
         // Clear handle on disconnect
         active_conn_handle = NO_CONN_HANDLE;
+
+        // Turn of LED if not connected to BLE client
+        set_rgb(s_led, LED_HSV_OFF);
+
         advertise(); /* Connection terminated; resume advertising. */
         break;
 
