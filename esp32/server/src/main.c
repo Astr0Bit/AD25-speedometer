@@ -3,7 +3,6 @@
 #include "esp_log.h"
 #include <stdbool.h>
 #include "led_strip.h"
-#include <esp_timer.h>
 #include "nvs_flash.h"
 #include "nimble/ble.h"
 #include "host/ble_hs.h"
@@ -49,19 +48,21 @@ static led_strip_handle_t s_led;
 
 // == Function declarations ==
 void configure_led(void);
+void configure_uart(void);
 
 // BLE error codes using onboard RGB led
-void ble_err_strobe();
-void ble_err_success();
-void ble_err_heartbeat();
+void ble_err_strobe(void);
+void ble_err_success(void);
+void ble_err_heartbeat(void);
 
 // For BLE
 static void on_sync(void);
 static void advertise(void);
-static ble_err_t ble_setup();
 static int gatt_svr_init(void);
+static ble_err_t ble_setup(void);
 static void on_reset(int reason);
 extern void ble_store_config_init(void);
+void check_ble_status(ble_err_t status_code);
 static int gap_event(struct ble_gap_event *event, void *arg);
 static void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *);
 static void set_rgb(led_strip_handle_t led, uint16_t hue, uint8_t saturation, uint8_t value);
@@ -120,54 +121,21 @@ void app_main(void)
     // Exclude the Idle Task from the Task WDT
     ESP_ERROR_CHECK(esp_task_wdt_delete(xTaskGetIdleTaskHandle()));
 
+    // ** For RGB led **
     configure_led();
 
     // ** For UART **
-    // Taken straight from docs, except for baud_rate:
-    // - https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/peripherals/uart.html
-    uart_config_t config = {
-        .baud_rate = BAUDRATE, // From setting.h
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_DEFAULT,
-    };
-
-    // Install driver and configure UART
-    ESP_ERROR_CHECK(uart_driver_install(UART, UART_BUF_SIZE, UART_BUF_SIZE, 0, NULL, 0));
-    ESP_ERROR_CHECK(uart_param_config(UART, &config));
-    ESP_ERROR_CHECK(uart_set_pin(UART, TX_PIN, RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
-
-    // * To store received event
-    uint8_t buffer[SBUFLEN];
+    configure_uart();
 
     // ** For BLE **
     ble_err_t ble_status = ble_setup();
-    // ble_status = BLE_ERR_GATT_SVR_INIT; // Just for testing different error codes
-    bool run_seq = true;
-    while (run_seq)
-    {
-        // Blink LED in an error sequence
-        switch (ble_status)
-        {
-        case BLE_ERR_GATT_SVR_INIT:
-            ble_err_strobe();
-            break;
-
-        case BLE_ERR_BLE_SVC_GAP_DEV_NAME:
-            ble_err_heartbeat();
-            break;
-
-        case BLE_OK:
-            ble_err_success();
-            run_seq = false; // Exit loop
-            break;
-        }
-    }
+    check_ble_status(ble_status); // NOTE: Blocking unless BLE_ERR_SUCCESS
 
     // Start the BLE task as a separate non-blocking task
     nimble_port_freertos_init(ble_host_task);
+
+    // To store bytes received over UART
+    uint8_t buffer[SBUFLEN];
 
     while (true)
     {
@@ -221,6 +189,26 @@ void app_main(void)
 }
 
 // == Function implementations ==
+// Helper to configure UART
+void configure_uart()
+{
+    // Taken straight from docs, except for baud_rate:
+    // - https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/peripherals/uart.html
+    uart_config_t config = {
+        .baud_rate = BAUDRATE, // From setting.h
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+
+    // Install driver and configure UART
+    ESP_ERROR_CHECK(uart_driver_install(UART, UART_BUF_SIZE, UART_BUF_SIZE, 0, NULL, 0));
+    ESP_ERROR_CHECK(uart_param_config(UART, &config));
+    ESP_ERROR_CHECK(uart_set_pin(UART, TX_PIN, RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+}
+
 // Helper for setting the RGB led
 static void set_rgb(led_strip_handle_t led, uint16_t hue, uint8_t saturation, uint8_t value)
 {
@@ -534,4 +522,28 @@ static ble_err_t ble_setup()
     }
 
     return BLE_OK;
+}
+
+void check_ble_status(ble_err_t status_code)
+{
+    bool run_seq = true;
+    while (run_seq)
+    {
+        // Blink LED in an error sequence
+        switch (status_code)
+        {
+        case BLE_ERR_GATT_SVR_INIT:
+            ble_err_strobe();
+            break;
+
+        case BLE_ERR_BLE_SVC_GAP_DEV_NAME:
+            ble_err_heartbeat();
+            break;
+
+        case BLE_OK:
+            ble_err_success();
+            run_seq = false; // Exit loop
+            break;
+        }
+    }
 }
