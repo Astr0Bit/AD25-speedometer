@@ -31,11 +31,10 @@ typedef enum
 #define UART UART_NUM_0 // USB UART
 #define TX_PIN GPIO_NUM_16
 #define RX_PIN GPIO_NUM_17
-#define UART_BUF_SIZE (2 * SOC_UART_FIFO_LEN)
-#define QUEUE_SIZE 8
-#define TX_MSG_LEN SBUFLEN
 #define RX_MSG_LEN SBUFLEN
 #define UART_TIMEOUT_MS 100
+#define BLE_DISCONNECT_INTERVAL_MS 500
+#define UART_BUF_SIZE (2 * SOC_UART_FIFO_LEN)
 
 // Configure RGB LED
 #define RGB_PIN GPIO_NUM_8
@@ -124,8 +123,6 @@ void app_main(void)
     configure_led();
 
     // ** For UART **
-    QueueHandle_t queue;
-
     // Taken straight from docs, except for baud_rate:
     // - https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/peripherals/uart.html
     uart_config_t config = {
@@ -138,12 +135,11 @@ void app_main(void)
     };
 
     // Install driver and configure UART
-    ESP_ERROR_CHECK(uart_driver_install(UART, UART_BUF_SIZE, UART_BUF_SIZE, QUEUE_SIZE, &queue, 0));
+    ESP_ERROR_CHECK(uart_driver_install(UART, UART_BUF_SIZE, UART_BUF_SIZE, 0, NULL, 0));
     ESP_ERROR_CHECK(uart_param_config(UART, &config));
     ESP_ERROR_CHECK(uart_set_pin(UART, TX_PIN, RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 
     // * To store received event
-    uart_event_t event;
     uint8_t buffer[SBUFLEN];
 
     // ** For BLE **
@@ -178,82 +174,49 @@ void app_main(void)
         // Whilst connected to BLE client
         while (active_conn_handle != NO_CONN_HANDLE)
         {
+            // Clear the buffer
+            bzero(buffer, SBUFLEN);
+
             // Read UART
-            if (pdTRUE == xQueueReceive(queue, (void *)&event, UART_TIMEOUT_MS))
+            int len = uart_read_bytes(UART, buffer, SBUFLEN, UART_TIMEOUT_MS);
+            if (len == RX_MSG_LEN)
             {
-                // Clear the buffer
-                bzero(buffer, SBUFLEN);
-
-                // Handle events
-                switch (event.type)
+                struct os_mbuf *txom = ble_hs_mbuf_from_flat(buffer, sizeof(buffer));
+                if (0 == ble_gatts_notify_custom(active_conn_handle, chrval_handle, txom))
                 {
-                case UART_DATA:
+                    set_rgb(s_led, LED_HSV_PKT);
+                }
+                else
                 {
-                    int len = uart_read_bytes(UART, buffer, event.size, portMAX_DELAY);
-                    if (len == RX_MSG_LEN)
-                    {
-                        struct os_mbuf *txom = ble_hs_mbuf_from_flat(buffer, sizeof(buffer));
-                        if (0 == ble_gatts_notify_custom(active_conn_handle, chrval_handle, txom))
-                        {
-                            set_rgb(s_led, LED_HSV_PKT);
-                        }
-                        else
-                        {
-                            ESP_LOGE(TAG, "Error in sending notification");
-                        }
-                    }
-                    else
-                    {
-                        ESP_LOGE(TAG, "Packet misaligned. Read %d bytes, expected %d", len, RX_MSG_LEN);
-                    }
-                    break;
+                    ESP_LOGE(TAG, "Error in sending notification");
                 }
-
-                case UART_FIFO_OVF: /* Event of HW FIFO overflow detected */
-                    ESP_LOGE(TAG, "Hardware FIFO overflow");
-                    // If fifo overflow happened, you should consider adding flow control for your application.
-                    uart_flush_input(UART);
-                    xQueueReset(queue);
-                    break;
-
-                case UART_BUFFER_FULL: /* Event of UART ring buffer full */
-                    ESP_LOGE(TAG, "Ring buffer full");
-                    // If buffer full happened, you should consider increasing your buffer size
-                    uart_flush_input(UART);
-                    xQueueReset(queue);
-                    break;
-
-                case UART_BREAK: /* Event of UART RX break detected */
-                    ESP_LOGE(TAG, "UART rx break");
-                    break;
-
-                case UART_PARITY_ERR: /* Event of UART parity check error */
-                    ESP_LOGE(TAG, "UART parity error");
-                    break;
-
-                case UART_FRAME_ERR: /* Event of UART frame error */
-                    ESP_LOGE(TAG, "UART frame error");
-                    break;
-
-                default: /* Others */
-                    break;
-                }
+            }
+            else if (len > 0)
+            {
+                ESP_LOGE(TAG, "Packet misaligned. Read %d bytes, expected %d", len, RX_MSG_LEN);
+            }
+            else if (len == 0)
+            {
+                // Nothing to read
+                set_rgb(s_led, LED_HSV_CONNECTED);
             }
             else
             {
-                set_rgb(s_led, LED_HSV_CONNECTED);
+                ESP_LOGE(TAG, "Error in reading UART");
             }
+
+            // Clear buffer after sending packet
+            uart_flush_input(UART);
         }
 
         // Clear buffer when not connected to BLE client
         uart_flush_input(UART);
-        xQueueReset(queue);
 
         // Turn of LED if not connected to BLE client
         set_rgb(s_led, LED_HSV_OFF);
 
         // Delay to not break the ESP32
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(BLE_DISCONNECT_INTERVAL_MS));
     }
 }
 
@@ -311,7 +274,7 @@ void ble_err_success()
 void configure_led(void)
 {
     led_strip_config_t strip_config = {
-        .strip_gpio_num = GPIO_NUM_8,
+        .strip_gpio_num = RGB_PIN,
         .max_leds = 1,
         .led_model = LED_MODEL_WS2812,
         .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB,
