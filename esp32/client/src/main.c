@@ -9,6 +9,7 @@
 #include "nimble/nimble_port.h"
 #include "services/gap/ble_svc_gap.h"
 #include "nimble/nimble_port_freertos.h"
+#include "esp_timer.h"
 #include "led_strip.h"
 #include "setting.h"
 
@@ -20,9 +21,7 @@
 
 #define DEVICE_NAME TAG
 
-#define LED_HSV_INIT 37, 255, 10
-#define LED_HSV_SCANNING 210, 255, 10
-#define LED_HSV_CONNECTED 120, 255, 10
+#define LED_STABLE_MIN_US (100 * 1000)
 
 static const uint8_t s_server_addr[] = SERVER_ADDR;
 static const uint8_t s_client_addr[] = CLIENT_ADDR;
@@ -41,6 +40,18 @@ static bool s_enc_done = false;
 static bool s_chr_found = false;
 
 static led_strip_handle_t s_led;
+static struct {
+    esp_timer_handle_t timer;
+    uint16_t hue;
+    bool state;
+} s_timer_state;
+
+#define UPDATE_LED(hue) do { \
+    if (esp_timer_is_active(s_timer_state.timer)) { ESP_ERROR_CHECK(esp_timer_stop(s_timer_state.timer)); } \
+    ESP_ERROR_CHECK(led_strip_set_pixel_hsv(s_led, 0, (hue), 255, 10)); \
+    ESP_ERROR_CHECK(led_strip_refresh(s_led)); \
+} while (0)
+#define ERR_LED() UPDATE_LED(0)
 
 extern void ble_store_config_init(void);
 static int gap_event(struct ble_gap_event* event, void* arg);
@@ -48,8 +59,13 @@ static void try_start_dsc_discovery(uint16_t conn_handle);
 
 static void scan(void)
 {
-    ESP_ERROR_CHECK(led_strip_set_pixel_hsv(s_led, 0, LED_HSV_SCANNING));
-    ESP_ERROR_CHECK(led_strip_refresh(s_led));
+    if (esp_timer_is_active(s_timer_state.timer))
+    {
+        ESP_ERROR_CHECK(esp_timer_stop(s_timer_state.timer));
+    }
+    s_timer_state.hue = 210;
+    s_timer_state.state = false;
+    ESP_ERROR_CHECK(esp_timer_start_periodic(s_timer_state.timer, 500 * 1000));
 
     struct ble_gap_disc_params disc_params = {0};
 
@@ -60,6 +76,7 @@ static void scan(void)
 
     if (status != 0)
     {
+        ERR_LED();
         ESP_LOGE(TAG, "Error initiating GAP discovery procedure; rc=%d\n", status);
     }
 }
@@ -68,12 +85,12 @@ static int on_subscription(uint16_t conn_handle, const struct ble_gatt_error* er
 {
     if (error->status == 0)
     {
-        ESP_ERROR_CHECK(led_strip_set_pixel_hsv(s_led, 0, LED_HSV_CONNECTED));
-        ESP_ERROR_CHECK(led_strip_refresh(s_led));
+        UPDATE_LED(120);
     }
     else
     {
         ble_gap_terminate(conn_handle, BLE_ERR_CONN_TERM_LOCAL);
+        ERR_LED();
     }
     return error->status;
 }
@@ -96,15 +113,17 @@ static int on_descriptor_discovery(uint16_t conn_handle, const struct ble_gatt_e
             }
             else
             {
-                ESP_LOGE(TAG, "Error: Writing characteristic value failed; rc=0x%03x", rc);
                 ble_gap_terminate(conn_handle, BLE_ERR_CONN_TERM_LOCAL);
+                ERR_LED();
+                ESP_LOGE(TAG, "Error: Writing characteristic value failed; rc=0x%03x", rc);
             }
         }
     }
     else if (error->status != BLE_HS_EDONE)
     {
-        ESP_LOGE(TAG, "Descriptor discovery failed: %d", error->status);
         ble_gap_terminate(conn_handle, BLE_ERR_CONN_TERM_LOCAL);
+        ERR_LED();
+        ESP_LOGE(TAG, "Descriptor discovery failed: %d", error->status);
     }
 
     return 0;
@@ -119,8 +138,9 @@ static int on_characteristic_discovery(uint16_t conn_handle, const struct ble_ga
     }
     else if (error->status != BLE_HS_EDONE)
     {
-        ESP_LOGE(TAG, "Characteristic discovery error: %d", error->status);
         ble_gap_terminate(conn_handle, BLE_ERR_CONN_TERM_LOCAL);
+        ERR_LED();
+        ESP_LOGE(TAG, "Characteristic discovery error: %d", error->status);
     }
 
     return 0;
@@ -133,14 +153,16 @@ static int on_service_discovery(uint16_t conn_handle, const struct ble_gatt_erro
         int rc = ble_gattc_disc_chrs_by_uuid(conn_handle, service->start_handle, service->end_handle, &s_gatt_chr_uuid.u, on_characteristic_discovery, NULL);
         if (rc != 0)
         {
-            ESP_LOGE(TAG, "Error: Characteristics discovery failed; rc=0x%03x", rc);
             ble_gap_terminate(conn_handle, BLE_ERR_CONN_TERM_LOCAL);
+            ERR_LED();
+            ESP_LOGE(TAG, "Error: Characteristics discovery failed; rc=0x%03x", rc);
         }
     }
     else if (error->status != BLE_HS_EDONE)
     {
-        ESP_LOGE(TAG, "Service discovery failed; status=%d\n", error->status);
         ble_gap_terminate(conn_handle, BLE_ERR_CONN_TERM_LOCAL);
+        ERR_LED();
+        ESP_LOGE(TAG, "Service discovery failed; status=%d\n", error->status);
     }
 
     return 0;
@@ -175,7 +197,11 @@ static void try_start_dsc_discovery(uint16_t conn_handle)
     if (s_enc_done && s_chr_found)
     {
         int rc = ble_gattc_disc_all_dscs(conn_handle, s_chr_val_handle, s_svc_end_handle, on_descriptor_discovery, NULL);
-        if (rc != 0) { ble_gap_terminate(conn_handle, BLE_ERR_CONN_TERM_LOCAL); }
+        if (rc != 0)
+        {
+            ble_gap_terminate(conn_handle, BLE_ERR_CONN_TERM_LOCAL);
+            ERR_LED();
+        }
     }
 }
 
@@ -218,6 +244,7 @@ static void connect_if_interesting(const struct ble_gap_disc_desc* disc)
 
             if (status != 0)
             {
+                ERR_LED();
                 char addr_str[18] = {0};
                 sprintf(addr_str, "%02X:%02X:%02X:%02X:%02X:%02X",
                         disc->addr.val[5], disc->addr.val[4], disc->addr.val[3],
@@ -227,6 +254,7 @@ static void connect_if_interesting(const struct ble_gap_disc_desc* disc)
         }
         else
         {
+            ERR_LED();
             ESP_LOGE(TAG, "Failed to cancel scan; status=%d\n", status);
         }
     }
@@ -250,16 +278,18 @@ static int gap_event(struct ble_gap_event* event, void*)
             rc = ble_gap_conn_find(event->connect.conn_handle, &desc);
             if (rc != 0)
             {
-                ESP_LOGE(TAG, "Error: Searching for connection descriptor failed; rc=0x%03x", rc);
                 ble_gap_terminate(event->connect.conn_handle, BLE_ERR_CONN_TERM_LOCAL);
+                ERR_LED();
+                ESP_LOGE(TAG, "Error: Searching for connection descriptor failed; rc=0x%03x", rc);
                 break;
             }
 
             rc = ble_gap_security_initiate(event->connect.conn_handle); /* Request connection encryption */
             if (rc != 0)
             {
-                ESP_LOGE(TAG, "Error: Security initiate failed; rc=0x%03x", rc);
                 ble_gap_terminate(event->connect.conn_handle, BLE_ERR_CONN_TERM_LOCAL);
+                ERR_LED();
+                ESP_LOGE(TAG, "Error: Security initiate failed; rc=0x%03x", rc);
                 break;
             }
             memcpy(s_peer_addr.val, desc.peer_id_addr.val, sizeof(desc.peer_id_addr.val));
@@ -267,14 +297,16 @@ static int gap_event(struct ble_gap_event* event, void*)
             rc = ble_gattc_disc_svc_by_uuid(event->connect.conn_handle, &s_gatt_svc_uuid.u, on_service_discovery, NULL);
             if (rc != 0)
             {
-                ESP_LOGE(TAG, "Error: Service discovery failed; rc=0x%03x", rc);
                 ble_gap_terminate(event->connect.conn_handle, BLE_ERR_CONN_TERM_LOCAL);
+                ERR_LED();
+                ESP_LOGE(TAG, "Error: Service discovery failed; rc=0x%03x", rc);
                 break;
             }
         }
         else
         {
             /* Connection attempt failed; resume scanning. */
+            ERR_LED();
             ESP_LOGE(TAG, "Error: Connection failed; status=%d\n", event->connect.status);
             scan();
         }
@@ -295,6 +327,7 @@ static int gap_event(struct ble_gap_event* event, void*)
         }
         else
         {
+            ERR_LED();
             ESP_LOGE(TAG, "connection encryption failed, status: %d", event->enc_change.status);
         }
         break;
@@ -311,6 +344,7 @@ static int gap_event(struct ble_gap_event* event, void*)
         }
         else
         {
+            ERR_LED();
             ESP_LOGE(TAG, "Error: Received %u bytes, Expected: %u", pktlen, SBUFLEN);
         }
         break;
@@ -336,7 +370,30 @@ static int gap_event(struct ble_gap_event* event, void*)
     return status;
 }
 
-void configure_led(void)
+static void timer_cb(void*)
+{
+    if (!s_timer_state.state)
+    {
+        ESP_ERROR_CHECK(led_strip_set_pixel_hsv(s_led, 0, s_timer_state.hue, 255, 10));
+        ESP_ERROR_CHECK(led_strip_refresh(s_led));
+    }
+    else
+    {
+        ESP_ERROR_CHECK(led_strip_clear(s_led));
+    }
+    s_timer_state.state = !s_timer_state.state;
+}
+
+static void configure_timer(void)
+{
+    esp_timer_create_args_t timer_args = {
+        .arg = NULL,
+        .callback = timer_cb,
+        .name = "timer_cb",
+    };
+    ESP_ERROR_CHECK(esp_timer_create(&timer_args, &s_timer_state.timer));
+}
+static void configure_led(void)
 {
     led_strip_config_t strip_config = {
         .strip_gpio_num = GPIO_NUM_8,
@@ -347,18 +404,19 @@ void configure_led(void)
             .invert_out = false,
         }
     };
-    led_strip_spi_config_t spi_config = {
+    led_strip_rmt_config_t rmt_config = {
         .clk_src = SPI_CLK_SRC_DEFAULT,
-        .spi_bus = SPI2_HOST,
+        .resolution_hz = 10 * 1000 * 1000,
+        .mem_block_symbols = 48,
         .flags = {
-            .with_dma = true,
+            .with_dma = false,
         }
     };
-    ESP_ERROR_CHECK(led_strip_new_spi_device(&strip_config, &spi_config, &s_led));
-    ESP_ERROR_CHECK(led_strip_set_pixel_hsv(s_led, 0, LED_HSV_INIT));
-    ESP_ERROR_CHECK(led_strip_refresh(s_led));
+    ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &s_led));
+    esp_rom_delay_us(100);
+    ESP_ERROR_CHECK(led_strip_clear(s_led));
 }
-void configure_uart(void)
+static void configure_uart(void)
 {
     uart_config_t config = {
             .baud_rate = BAUDRATE,
@@ -371,20 +429,8 @@ void configure_uart(void)
     ESP_ERROR_CHECK(uart_driver_install(UART, UART_RX_BUF_SIZE, UART_TX_BUF_SIZE, 0, NULL, 0));
     ESP_ERROR_CHECK(uart_param_config(UART, &config));
 }
-
-void app_main(void)
+static void configure_ble(void)
 {
-    configure_led();
-    configure_uart();
-
-    esp_err_t status = nvs_flash_init();
-    if (status == ESP_ERR_NVS_NO_FREE_PAGES || status == ESP_ERR_NVS_NEW_VERSION_FOUND)
-    {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        status = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(status);
-
     ESP_ERROR_CHECK(nimble_port_init());
 
     /* Configure the host. */
@@ -407,6 +453,23 @@ void app_main(void)
     /* Set the default device name. */
     rc = ble_svc_gap_device_name_set(DEVICE_NAME);
     assert(rc == 0);
+}
+
+void app_main(void)
+{
+    configure_timer();
+    configure_led();
+    configure_uart();
+
+    esp_err_t status = nvs_flash_init();
+    if (status == ESP_ERR_NVS_NO_FREE_PAGES || status == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        status = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(status);
+
+    configure_ble();
 
     nimble_port_run();
     nimble_port_freertos_deinit();
