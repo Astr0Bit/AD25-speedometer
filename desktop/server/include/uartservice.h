@@ -7,7 +7,6 @@
 class UARTService : public QThread,
                     public COMService
 {
-    Q_OBJECT
 
 public:
     /**
