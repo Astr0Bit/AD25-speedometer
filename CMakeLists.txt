@@ -104,10 +104,12 @@ target_compile_definitions(server PRIVATE ${SERVER_DEFS})
 target_link_libraries(server PRIVATE ${SERVER_LIBS})
 
 add_custom_target(use_tcp
+    COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} -t clean
     COMMAND ${CMAKE_COMMAND} -DUARTCOM:BOOL=OFF -S ${CMAKE_SOURCE_DIR} -B ${CMAKE_BINARY_DIR}
     VERBATIM
 )
 add_custom_target(use_uart
+    COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} -t clean
     COMMAND ${CMAKE_COMMAND} -DUARTCOM:BOOL=ON -S ${CMAKE_SOURCE_DIR} -B ${CMAKE_BINARY_DIR}
     VERBATIM
 )
