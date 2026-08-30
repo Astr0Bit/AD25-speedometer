@@ -5,17 +5,16 @@
 
 uint64_t COMService::extract64(size_t byte_off)
 {
-    std::unique_lock<std::mutex> lock{m_mtx, std::defer_lock};
     uint64_t v{};
+
+    std::scoped_lock lock{m_mtx};
     if (byte_off + 8 <= SBUFLEN)
     {
-        lock.lock();
         std::memcpy(&v, m_buffer + byte_off, 8);
     }
     else
     {
         const size_t n{SBUFLEN - byte_off};
-        lock.lock();
         for (size_t i = 0; i < n; ++i)
             v |= static_cast<uint64_t>(m_buffer[byte_off + i]) << (i << 3);
     }
@@ -60,4 +59,10 @@ void COMService::getLightSignals(bool& outl, bool& outr)
     const auto& si_r = Setting::Signal::handle()["right_light"];
     outl = read<bool>(si_l.start, si_l.length);
     outr = read<bool>(si_r.start, si_r.length);
+}
+
+void COMService::clearBuffer()
+{
+    std::lock_guard<std::mutex> lock{m_mtx};
+    bzero(m_buffer, SBUFLEN);
 }
