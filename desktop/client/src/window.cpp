@@ -55,6 +55,7 @@ Window::Window(COMService &com_service, QWidget *parent)
         }
         else {
             m_canvas.setCommunicationStatus(false);
+            m_com_service.clearBuffer();
         } });
 
     m_connBufTimer.start(Setting::INTERVAL);

@@ -18,6 +18,7 @@ protected:
     virtual void run() = 0;
 
 public:
+    void clearBuffer(void);
     void getSpeed(uint8_t& out);
     void getTemp(int8_t& out);
     void getBattery(uint8_t& out);
