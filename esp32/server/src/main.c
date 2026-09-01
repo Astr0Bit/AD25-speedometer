@@ -163,11 +163,6 @@ void app_main(void)
             {
                 ESP_LOGE(TAG, "Packet misaligned. Read %d bytes, expected %d", len, RX_MSG_LEN);
             }
-            else if (len == 0)
-            {
-                // Nothing to read
-                set_rgb(s_led, LED_HSV_CONNECTED);
-            }
             else
             {
                 ESP_LOGE(TAG, "Error in reading UART");
